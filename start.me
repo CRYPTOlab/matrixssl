@@ -1,0 +1,32 @@
+/*
+    start.me - MatrixSSL MakeMe file
+ */
+
+Me.load({
+    targets: {
+        cache: {
+            action: `
+                trace('Build', 'MatrixSSL libraries')
+                if (Config.OS == 'windows') {
+                    cmd('make -f Makefile.win clean')
+                    cmd('make -f Makefile.win')
+                } else {
+                    sh('make clean')
+                    sh('make')
+                }
+            `,
+        },
+
+        /*
+            Patch new releases - run manually
+         */ 
+        patch: {
+            action: `
+                sh('git checkout package.json windows.bat start.me')
+                for each (f in Path('.').files('*.patch')) {
+                    sh('patch < ' + f)
+                }
+            `
+        },
+    },
+})
