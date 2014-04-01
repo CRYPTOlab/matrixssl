@@ -1,0 +1,14 @@
+*.o
+**/*.o
+*.a
+*.dylib
+*.pc
+*test
+*.s
+lib
+*.0
+*.bak
+apps/openssl
+crypto/buildinf.h
+rehash.time
+/macosx-*
