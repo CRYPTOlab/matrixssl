@@ -111,11 +111,11 @@ ifeq ($(shell uname),Darwin)
   #
   CCARCH = $(shell $(CC) -v 2>&1)
   ifneq (,$(findstring x86_64,$(CCARCH)))
-    CFLAGS += -DPSTM_64BIT -DPSTM_X86_64
+    # CFLAGS += -DPSTM_64BIT -DPSTM_X86_64
   else
     LDFLAGS += -read_only_relocs suppress
     ifndef PS_DEBUG
-      CFLAGS += -DPSTM_X86
+      # CFLAGS += -DPSTM_X86
     endif
   endif
 else

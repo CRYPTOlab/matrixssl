@@ -1,5 +1,8 @@
 {
-    "name": "matrixssl-src",
+    "name": "matrixssl",
     "description": "MatrixSSL Source Code",
     "version": "3.4.0",
+    "keywords": [
+        "appweb",
+    ],
 }

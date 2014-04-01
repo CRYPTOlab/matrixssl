@@ -3,18 +3,42 @@
  */
 
 Me.load({
+    dir: {
+        obj: 'obj',
+    },
     targets: {
+        libmatrixssl: {
+            type: 'lib',
+            sources: [ 
+                'core/*.c',
+                'crypto/**.c',
+                'matrixssl/*.c' 
+            ],
+            defines: [ 'MATRIX_USE_FILE_SYSTEM' ],
+            includes: [ '.' ],
+            '-compiler': [
+                '-Wall',
+                '-Wshorten-64-to-32',
+                '-Wunreachable-code',
+                '-Wno-unused-result',
+            ],
+            scripts: {
+                presource: `
+                    if (me.platform.like == 'unix') {
+                        me.target.defines.push('POSIX')
+                        me.target.sources.push('core/POSIX/osdep.c')
+                    } else {
+                        me.target.sources.push('core/WIN32/osdep.c')
+                    }
+                    if (me.settings.debug) {
+                        me.target.defines.push('DEBUG')
+                    }
+                `,
+            },
+        },
+
         cache: {
-            action: `
-                trace('Build', 'MatrixSSL libraries')
-                if (Config.OS == 'windows') {
-                    cmd('make -f Makefile.win clean')
-                    cmd('make -f Makefile.win')
-                } else {
-                    sh('make clean')
-                    sh('make')
-                }
-            `,
+            depends: [ 'libmatrixssl' ],
         },
 
         /*
