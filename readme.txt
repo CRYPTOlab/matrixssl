@@ -1,13 +1,15 @@
 MatrixSSL Directory Structure
 
 matrixssl/
-	this directory contains files the implement the SSL and TLS protocol.
+	This directory contains files the implement the SSL and TLS protocol.
 	test/
-		single-process SSL handshake test application
+		Single-process SSL handshake test application that exercises the
+		cipher suites and handshakes that are available in the currently
+		built library
 
 core/
-	pool based malloc() implementation*
-	utility functions
+	Pool based malloc() implementation*
+	Utility functions
 	POSIX/
 		Operating system layer for Linux, BSD
 		TCP layer for Linux, BSD and Windows
@@ -16,30 +18,38 @@ core/
 
 crypto/
 	digest/
-		message digests: md5, sha-1, sha-256*, hmac, etc.
+		Message digests: md5, sha-1, sha-256*, hmac, etc.
 	keyformat/
-		key parsing routines for x.509, base64 and asn.1 data formats
+		Key parsing routines for x.509, base64 and asn.1 data formats
 	math/
-		large integer math operations
+		Large integer math operations
 	prng/
-		psuedo random number generation
+		Psuedo random number generation
 	pubkey/
 		RSA and DH* operations
 		PKCS enccoding and decoding of keys
 	symmetric/
-		symmetric ciphers: arc4, 3des, aes, seed*
+		Symmetric ciphers: arc4, 3des, aes, seed*
+	hardware/
+		AES-NI 
+		Platform specific hardware crypto* 
 
 apps/
-	example SSL client using blocking sockets and session resumption
-	example SSL server using non-blocking sockets and simultaneous connections
+	Example SSL client using blocking sockets and session resumption
+	Example SSL server using non-blocking sockets and simultaneous connections
 
 doc/
-	release notes
-	developer guides
-	api documentation
+	Release notes
+	Developer guides
+	API documentation
 
 sampleCerts/
-	sample RSA keys and certificate files for testing and example apps
+	Sample RSA and EC* keys and certificate files for testing and example apps
+
+validation_tests/
+	Comprehensive tests that compile numerous configurations of servers and
+	clients and are then run with the various supported ciphers suites and
+	protocol versions. 
 
 * utilities/ 
 	certgen - generate X.509 cert from a certificate request or self-signed

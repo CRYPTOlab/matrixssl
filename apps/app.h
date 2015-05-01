@@ -1,11 +1,11 @@
-/*
- *	app.h
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
- *	
- *	Header for MatrixSSL example sockets client and server applications
+/**
+ *	@file    app.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
+ *
+ *	Header for MatrixSSL example sockets client and server applications.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -40,6 +40,9 @@ extern "C" {
 #endif
 /******************************************************************************/
 
+#include "core/coreApi.h"
+#include "matrixssl/matrixsslApi.h"
+
 #include <errno.h>			/* Defines EWOULDBLOCK, etc. */
 #include <fcntl.h>			/* Defines FD_CLOEXEC, etc. */
 #include <stdlib.h>			/* Defines malloc, exit, etc. */
@@ -52,9 +55,6 @@ extern "C" {
 #endif
 
 #ifdef WIN32
-#include <Winsock2.h>
-#include <Ws2tcpip.h>
-
 #define SIGPIPE			SIGABRT
 #define snprintf		_snprintf
 #define close			closesocket
@@ -65,30 +65,24 @@ extern "C" {
 #ifndef EINPROGRESS
 #define EINPROGRESS		WSAEINPROGRESS
 #endif
-#define strcasecmp		lstrcmpiA
 #endif /* WIN32 */
 
 
-#include "core/coreApi.h"
-#include "matrixssl/matrixsslApi.h"
-	
 /******************************************************************************/
 /*
 	 Platform independent socket defines for convenience
  */
-#ifndef SOCKET
-	typedef int32 SOCKET;
-#endif
 #ifndef INVALID_SOCKET
-#define INVALID_SOCKET	-1
+ #define INVALID_SOCKET	(-1)
+ typedef int32 SOCKET;
 #endif
-	
+
 #ifdef WIN32
-#define SOCKET_ERRNO	WSAGetLastError()
+ #define SOCKET_ERRNO	WSAGetLastError()
 #else
-#define SOCKET_ERRNO	errno
+ #define SOCKET_ERRNO	errno
 #endif
-	
+
 /******************************************************************************/
 /*
 	Configuration Options
@@ -100,8 +94,8 @@ extern "C" {
 	Protocol specific defines
  */
 /* Maximum size of parseable http element. In this case, a HTTP header line. */
-#define HTTPS_BUFFER_MAX 256	
-	
+#define HTTPS_BUFFER_MAX 256
+
 /* Return codes from http parsing routine */
 #define HTTPS_COMPLETE	1	/* Full request/response parsed */
 #define HTTPS_PARTIAL	0	/* Only a partial request/response was received */
@@ -116,9 +110,14 @@ typedef struct {
 	uint32			flags;
 	unsigned char	*parsebuf;		/* Partial data */
 	uint32			parsebuflen;
+	uint32			bytes_received;
+	uint32			bytes_requested;
+	uint32			bytes_sent;
+	psPool_t		*bufPool; /* Mem pool to allocate inbuf and outbuf */
 } httpConn_t;
 
-extern int32 httpBasicParse(httpConn_t *cp, unsigned char *buf, uint32 len);
+extern int32 httpBasicParse(httpConn_t *cp, unsigned char *buf, uint32 len,
+	int32 trace);
 
 /******************************************************************************/
 

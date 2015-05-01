@@ -1,14 +1,14 @@
-/*
- *	tls.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    tls.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	TLS (SSLv3.1+) specific code
+ *	TLS (SSLv3.1+) specific code.
  *	http://www.faqs.org/rfcs/rfc2246.html
  *	Primarily dealing with secret generation, message authentication codes
  *	and handshake hashing.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -19,15 +19,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -53,9 +53,9 @@ int32 tlsDeriveKeys(ssl_t *ssl)
 {
 	unsigned char	msSeed[SSL_HS_RANDOM_SIZE * 2 + LABEL_SIZE];
 	uint32			reqKeyLen;
-	
+
 /*
-	If this session is resumed, we want to reuse the master secret to 
+	If this session is resumed, we want to reuse the master secret to
 	regenerate the key block with the new random values.
 */
 	if (ssl->flags & SSL_FLAGS_RESUMED) {
@@ -65,25 +65,39 @@ int32 tlsDeriveKeys(ssl_t *ssl)
 	master_secret = PRF(pre_master_secret, "master secret",
 		client_random + server_random);
 */
-	memcpy(msSeed, LABEL_MASTERSEC, LABEL_SIZE); 
+	memcpy(msSeed, LABEL_MASTERSEC, LABEL_SIZE);
 	memcpy(msSeed + LABEL_SIZE, ssl->sec.clientRandom,
 		SSL_HS_RANDOM_SIZE);
 	memcpy(msSeed + LABEL_SIZE + SSL_HS_RANDOM_SIZE,
 		ssl->sec.serverRandom, SSL_HS_RANDOM_SIZE);
-			
+
+#ifdef USE_TLS_1_2
+	if (ssl->flags & SSL_FLAGS_TLS_1_2) {
+		prf2(ssl->sec.premaster, ssl->sec.premasterSize, msSeed,
+				(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.masterSecret,
+				SSL_HS_MASTER_SIZE, ssl->cipher->flags);
+#ifndef USE_ONLY_TLS_1_2
+	} else {
+		prf(ssl->sec.premaster, ssl->sec.premasterSize, msSeed,
+			(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.masterSecret,
+			SSL_HS_MASTER_SIZE);
+#endif
+	}
+#else
 	prf(ssl->sec.premaster, ssl->sec.premasterSize, msSeed,
 		(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.masterSecret,
 		SSL_HS_MASTER_SIZE);
+#endif
 
 /*
 	 premaster is now allocated for DH reasons.  Can free here
 */
-	psFree(ssl->sec.premaster);
+	psFree(ssl->sec.premaster, ssl->hsPool);
 	ssl->sec.premaster = NULL;
 	ssl->sec.premasterSize = 0;
 
 skipPremaster:
-	memcpy(msSeed, LABEL_KEY_BLOCK, LABEL_SIZE); 
+	memcpy(msSeed, LABEL_KEY_BLOCK, LABEL_SIZE);
 	memcpy(msSeed + LABEL_SIZE, ssl->sec.serverRandom,
 		SSL_HS_RANDOM_SIZE);
 	memcpy(msSeed + LABEL_SIZE + SSL_HS_RANDOM_SIZE,
@@ -91,13 +105,27 @@ skipPremaster:
 /*
 	We must generate enough key material to fill the various keys
 */
-	reqKeyLen = 2 * ssl->cipher->macSize + 
-				2 * ssl->cipher->keySize + 
+	reqKeyLen = 2 * ssl->cipher->macSize +
+				2 * ssl->cipher->keySize +
 				2 * ssl->cipher->ivSize;
 
+#ifdef USE_TLS_1_2
+		if (ssl->flags & SSL_FLAGS_TLS_1_2) {
+			prf2(ssl->sec.masterSecret, SSL_HS_MASTER_SIZE, msSeed,
+				(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.keyBlock,
+				reqKeyLen, ssl->cipher->flags);
+#ifndef USE_ONLY_TLS_1_2
+		} else {
+			prf(ssl->sec.masterSecret, SSL_HS_MASTER_SIZE, msSeed,
+				(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.keyBlock,
+				reqKeyLen);
+#endif
+		}
+#else
 	prf(ssl->sec.masterSecret, SSL_HS_MASTER_SIZE, msSeed,
 		(SSL_HS_RANDOM_SIZE * 2) + LABEL_SIZE, ssl->sec.keyBlock,
 		reqKeyLen);
+#endif
 	if (ssl->flags & SSL_FLAGS_SERVER) {
 		ssl->sec.rMACptr = ssl->sec.keyBlock;
 		ssl->sec.wMACptr = ssl->sec.rMACptr + ssl->cipher->macSize;
@@ -118,21 +146,22 @@ skipPremaster:
 }
 
 #ifdef USE_SHA_MAC
+#ifdef USE_SHA1
 /******************************************************************************/
 /*
 	TLS sha1 HMAC generate/verify
 */
-int32 tlsHMACSha1(ssl_t *ssl, int32 mode, unsigned char type,	
+int32 tlsHMACSha1(ssl_t *ssl, int32 mode, unsigned char type,
 			unsigned char *data, uint32 len, unsigned char *mac)
-{	
+{
 	psHmacContext_t		ctx;
 	unsigned char		*key, *seq;
 	unsigned char		majVer, minVer, tmp[5];
 	int32				i;
-		
+
 	majVer = ssl->majVer;
 	minVer = ssl->minVer;
-	
+
 	if (mode == HMAC_CREATE) {
 		key = ssl->sec.writeMAC;
 		seq = ssl->sec.seq;
@@ -140,16 +169,16 @@ int32 tlsHMACSha1(ssl_t *ssl, int32 mode, unsigned char type,
 		key = ssl->sec.readMAC;
 		seq = ssl->sec.remSeq;
 	}
-	
+
 	psHmacSha1Init(&ctx, key, SHA1_HASH_SIZE);
 		psHmacSha1Update(&ctx, seq, 8);
 		for (i = 7; i >= 0; i--) {
 			seq[i]++;
 			if (seq[i] != 0) {
-				break; 
+				break;
 			}
 		}
-	
+
 	tmp[0] = type;
 	tmp[1] = majVer;
 	tmp[2] = minVer;
@@ -159,15 +188,60 @@ int32 tlsHMACSha1(ssl_t *ssl, int32 mode, unsigned char type,
 	psHmacSha1Update(&ctx, data, len);
 	return psHmacSha1Final(&ctx, mac);
 }
+#endif /* USE_SHA1 */
 
+#ifdef USE_SHA256
+/******************************************************************************/
+/*
+	TLS sha2 HMAC generate/verify
+*/
+int32 tlsHMACSha2(ssl_t *ssl, int32 mode, unsigned char type,
+			unsigned char *data, uint32 len, unsigned char *mac, int32 hashLen)
+{
+	psHmacContext_t		ctx;
+	unsigned char		*key, *seq;
+	unsigned char		majVer, minVer, tmp[5];
+	int32				i;
+
+	majVer = ssl->majVer;
+	minVer = ssl->minVer;
+
+	if (mode == HMAC_CREATE) {
+		key = ssl->sec.writeMAC;
+		seq = ssl->sec.seq;
+	} else { /* HMAC_VERIFY */
+		key = ssl->sec.readMAC;
+		seq = ssl->sec.remSeq;
+	}
+
+	psHmacSha2Init(&ctx, key, hashLen, hashLen);
+		psHmacSha2Update(&ctx, seq, 8, hashLen);
+		for (i = 7; i >= 0; i--) {
+			seq[i]++;
+			if (seq[i] != 0) {
+				break;
+			}
+		}
+
+	tmp[0] = type;
+	tmp[1] = majVer;
+	tmp[2] = minVer;
+	tmp[3] = (len & 0xFF00) >> 8;
+	tmp[4] = len & 0xFF;
+	psHmacSha2Update(&ctx, tmp, 5, hashLen);
+	psHmacSha2Update(&ctx, data, len, hashLen);
+	return psHmacSha2Final(&ctx, mac, hashLen);
+}
+#endif /* USE_SHA256 */
 #endif /* USE_SHA_MAC */
 
+#ifdef USE_MD5
 #ifdef USE_MD5_MAC
 /******************************************************************************/
 /*
 	TLS MD5 HMAC generate/verify
 */
-int32 tlsHMACMd5(ssl_t *ssl, int32 mode, unsigned char type,	
+int32 tlsHMACMd5(ssl_t *ssl, int32 mode, unsigned char type,
 				 unsigned char *data, uint32 len, unsigned char *mac)
 {
 	psHmacContext_t		ctx;
@@ -177,7 +251,7 @@ int32 tlsHMACMd5(ssl_t *ssl, int32 mode, unsigned char type,
 
 	majVer = ssl->majVer;
 	minVer = ssl->minVer;
-	
+
 	if (mode == HMAC_CREATE) {
 		key = ssl->sec.writeMAC;
 		seq = ssl->sec.seq;
@@ -185,13 +259,13 @@ int32 tlsHMACMd5(ssl_t *ssl, int32 mode, unsigned char type,
 		key = ssl->sec.readMAC;
 		seq = ssl->sec.remSeq;
 	}
-	
+
 	psHmacMd5Init(&ctx, key, MD5_HASH_SIZE);
 		psHmacMd5Update(&ctx, seq, 8);
 		for (i = 7; i >= 0; i--) {
 			seq[i]++;
 			if (seq[i] != 0) {
-				break; 
+				break;
 			}
 		}
 
@@ -205,30 +279,31 @@ int32 tlsHMACMd5(ssl_t *ssl, int32 mode, unsigned char type,
 	return psHmacMd5Final(&ctx, mac);
 }
 #endif /* USE_MD5_MAC */
-
+#endif /* USE_MD5 */
+#endif /* USE_TLS */
 
 int32 sslCreateKeys(ssl_t *ssl)
 {
 #ifdef USE_TLS
-		if (ssl->flags & SSL_FLAGS_TLS) {		
-			return tlsDeriveKeys(ssl);		
-		} else {
-#ifndef DISABLE_SSLV3		
-			return sslDeriveKeys(ssl);
+	if (ssl->flags & SSL_FLAGS_TLS) {
+		return tlsDeriveKeys(ssl);
+	} else {
+#ifndef DISABLE_SSLV3
+		return sslDeriveKeys(ssl);
 #else
-			return PS_ARG_FAIL;
-#endif /* DISABLE_SSLV3 */			
+		return PS_ARG_FAIL;
+#endif /* DISABLE_SSLV3 */
 		}
 #else /* SSLv3 only below */
 #ifndef DISABLE_SSLV3
 		return sslDeriveKeys(ssl);
-#endif /* DISABLE_SSLV3 */		
+#endif /* DISABLE_SSLV3 */
 #endif /* USE_TLS */
 }
 
 /******************************************************************************/
 /*
-	Cipher suites are chosen before they are activated with the 
+	Cipher suites are chosen before they are activated with the
 	ChangeCipherSuite message.  Additionally, the read and write cipher suites
 	are activated at different times in the handshake process.  The following
 	APIs activate the selected cipher suite callback functions.
@@ -238,7 +313,16 @@ int32 sslActivateReadCipher(ssl_t *ssl)
 
 	ssl->decrypt = ssl->cipher->decrypt;
 	ssl->verifyMac = ssl->cipher->verifyMac;
-	ssl->deMacSize = ssl->cipher->macSize;
+	ssl->nativeDeMacSize = ssl->cipher->macSize;
+	if (ssl->extFlags.truncated_hmac) {
+		if (ssl->cipher->macSize > 0) { /* Only for HMAC-based ciphers */
+			ssl->deMacSize = 10;
+		} else {
+			ssl->deMacSize = ssl->cipher->macSize;
+		}
+	} else {
+		ssl->deMacSize = ssl->cipher->macSize;
+	}
 	ssl->deBlockSize = ssl->cipher->blockSize;
 	ssl->deIvSize = ssl->cipher->ivSize;
 /*
@@ -248,7 +332,17 @@ int32 sslActivateReadCipher(ssl_t *ssl)
 
 	if (ssl->cipher->ident != SSL_NULL_WITH_NULL_NULL) {
 		ssl->flags |= SSL_FLAGS_READ_SECURE;
-		
+
+#ifdef USE_TLS_1_2
+		if (ssl->deMacSize == 0) {
+			/* Need a concept for GMAC read and write start times for the
+				cases surrounding changeCipherSpec if moving from one suite
+				to another */
+			ssl->flags |= SSL_FLAGS_GMAC_R;
+		} else {
+			ssl->flags &= ~SSL_FLAGS_GMAC_R;
+		}
+#endif
 /*
 		Copy the newly activated read keys into the live buffers
 */
@@ -275,7 +369,16 @@ int32 sslActivateWriteCipher(ssl_t *ssl)
 
 	ssl->encrypt = ssl->cipher->encrypt;
 	ssl->generateMac = ssl->cipher->generateMac;
-	ssl->enMacSize = ssl->cipher->macSize;
+	ssl->nativeEnMacSize = ssl->cipher->macSize;
+	if (ssl->extFlags.truncated_hmac) {
+		if (ssl->cipher->macSize > 0) { /* Only for HMAC-based ciphers */
+			ssl->enMacSize = 10;
+		} else {
+			ssl->enMacSize = ssl->cipher->macSize;
+		}
+	} else {
+		ssl->enMacSize = ssl->cipher->macSize;
+	}
 	ssl->enBlockSize = ssl->cipher->blockSize;
 	ssl->enIvSize = ssl->cipher->ivSize;
 /*
@@ -285,7 +388,17 @@ int32 sslActivateWriteCipher(ssl_t *ssl)
 	if (ssl->cipher->ident != SSL_NULL_WITH_NULL_NULL) {
 		ssl->flags |= SSL_FLAGS_WRITE_SECURE;
 
-		
+#ifdef USE_TLS_1_2
+		if (ssl->enMacSize == 0) {
+			/* Need a concept for GMAC read and write start times for the
+				cases surrounding changeCipherSpec if moving from one suite
+				to another */
+			ssl->flags |= SSL_FLAGS_GMAC_W;
+		} else {
+			ssl->flags &= ~SSL_FLAGS_GMAC_W;
+		}
+#endif
+
 /*
 		Copy the newly activated write keys into the live buffers
 */
@@ -307,7 +420,6 @@ int32 sslActivateWriteCipher(ssl_t *ssl)
 }
 
 /******************************************************************************/
-#endif /* USE_TLS */
 
 
 #ifdef USE_CLIENT_SIDE_SSL
@@ -315,21 +427,21 @@ int32 sslActivateWriteCipher(ssl_t *ssl)
 /*
 	Allocate a tlsExtenstion_t structure
 */
-int32 matrixSslNewHelloExtension(tlsExtension_t **extension)
+int32 matrixSslNewHelloExtension(tlsExtension_t **extension, void *userPoolPtr)
 {
 	psPool_t		*pool = NULL;
 	tlsExtension_t	*ext;
-	
-   
-    ext = psMalloc(pool, sizeof(tlsExtension_t));
-    if (ext == NULL) {
-        return PS_MEM_FAIL;
-    }
-    memset(ext, 0x0, sizeof(tlsExtension_t));
-    ext->pool = pool;
-   
-    *extension = ext;
-    return PS_SUCCESS;
+
+
+	ext = psMalloc(pool, sizeof(tlsExtension_t));
+	if (ext == NULL) {
+		return PS_MEM_FAIL;
+	}
+	memset(ext, 0x0, sizeof(tlsExtension_t));
+	ext->pool = pool;
+
+	*extension = ext;
+	return PS_SUCCESS;
 }
 
 /******************************************************************************/
@@ -338,20 +450,23 @@ int32 matrixSslNewHelloExtension(tlsExtension_t **extension)
 */
 void matrixSslDeleteHelloExtension(tlsExtension_t *extension)
 {
+	psPool_t		*pool;
 	tlsExtension_t	*next, *ext;
-	
+
 	if (extension == NULL) {
 		return;
 	}
 	ext = extension;
+	pool = ext->pool;
+
 /*
 	Free first one
 */
 	if (ext->extData) {
-		psFree(ext->extData);
+		psFree(ext->extData, pool);
 	}
 	next = ext->next;
-	psFree(ext);
+	psFree(ext, pool);
 /*
 	Free others
 */
@@ -359,12 +474,12 @@ void matrixSslDeleteHelloExtension(tlsExtension_t *extension)
 		ext = next;
 		next = ext->next;
 		if (ext->extData) {
-			psFree(ext->extData);
+			psFree(ext->extData, pool);
 		}
-		psFree(ext);
+		psFree(ext, pool);
 	}
-	
-	return; 
+
+	return;
 }
 
 /*****************************************************************************/
@@ -402,7 +517,7 @@ int32 matrixSslLoadHelloExtension(tlsExtension_t *ext,
 /*
 	Supports an empty extension which is really a one byte 00:
 		ff 01 00 01 00  (two byte type, two byte len, one byte 00)
-		
+
 	This will either be passed in as a NULL 'extension' with a 0 length - OR -
 	A pointer to a one byte 0x0 and a length of 1.  In either case, the
 	structure will identify the ext with a length of 1 and a NULL data ptr
@@ -426,7 +541,6 @@ int32 matrixSslLoadHelloExtension(tlsExtension_t *ext,
 	return PS_SUCCESS;
 }
 #endif /* USE_CLIENT_SIDE_SSL */
-
 
 /******************************************************************************/
 

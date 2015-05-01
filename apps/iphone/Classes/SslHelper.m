@@ -248,6 +248,7 @@ static int32 certCb(ssl_t *ssl, psX509Cert_t *cert, int32 alert)
 	int32			rc, transferred, len, complete;
 	ssl_t			*ssl;
 	unsigned char	*buf;
+	sslSessOpts_t	options;
 	SOCKET			fd;
 	
 	complete = 0;
@@ -258,8 +259,10 @@ static int32 certCb(ssl_t *ssl, psX509Cert_t *cert, int32 alert)
             [NSString stringWithFormat:@"Connect failed: %d. Exiting", rc]];
 		return PS_PLATFORM_FAIL;
 	}
+	memset(&options, 0x0, sizeof(sslSessOpts_t));
 	
-	rc = matrixSslNewClientSession(&ssl, keys, sid, 0, certCb, NULL, NULL, 0);
+	rc = matrixSslNewClientSession(&ssl, keys, sid, 0, 0, certCb, NULL,
+		NULL, NULL, &options);
 	if (rc != MATRIXSSL_REQUEST_SEND) {
         [delegate logDebugMessage:[NSString stringWithFormat:
                                    @"New Client Session Failed: %d. Exiting",

@@ -1,11 +1,11 @@
-/*
- *	hsHash.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    hsHash.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	"Native" handshake hash
+ *	"Native" handshake hash.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -43,9 +43,16 @@
 */
 int32 sslInitHSHash(ssl_t *ssl)
 {
-
+#ifndef USE_ONLY_TLS_1_2
 	psSha1Init(&ssl->sec.msgHashSha1);
 	psMd5Init(&ssl->sec.msgHashMd5);
+#endif
+#ifdef USE_TLS_1_2
+	psSha256Init(&ssl->sec.msgHashSha256);
+#ifdef USE_SHA384
+	psSha384Init(&ssl->sec.msgHashSha384);
+#endif
+#endif
 	return 0;
 }
 
@@ -56,16 +63,80 @@ int32 sslInitHSHash(ssl_t *ssl)
 int32 sslUpdateHSHash(ssl_t *ssl, unsigned char *in, uint32 len)
 {
 
+#ifdef USE_TLS_1_2
+	/* Keep a running total of each for greatest RFC support when it comes
+		to the CertificateVerify message.  Although, trying to be smart
+		about MD5 and SHA-2 based on protocol version */
+	if ((ssl->majVer == 0 && ssl->minVer == 0) ||
+			ssl->minVer == TLS_1_2_MIN_VER) {
+		psSha256Update(&ssl->sec.msgHashSha256, in, len);
+#ifdef USE_SHA384
+		psSha384Update(&ssl->sec.msgHashSha384, in, len);
+#endif
+	}
+#ifndef USE_ONLY_TLS_1_2
+	if (ssl->reqMinVer == 0 || ssl->minVer != TLS_1_2_MIN_VER) {
+		psMd5Update(&ssl->sec.msgHashMd5, in, len);
+	}
+	psSha1Update(&ssl->sec.msgHashSha1, in, len);
+#endif
+
+#else
 	psMd5Update(&ssl->sec.msgHashMd5, in, len);
 	psSha1Update(&ssl->sec.msgHashSha1, in, len);
+#endif
 
 	return 0;
 }
 
+#ifdef USE_TLS_1_2
+/*	Functions necessary to deal with needing to keep track of both SHA-1
+	and SHA-256 handshake hash states.  FINISHED message will always be
+	SHA-256 but client might be sending SHA-1 CertificateVerify message */
+#if defined(USE_SERVER_SIDE_SSL) && defined(USE_CLIENT_AUTH)
+#ifndef USE_ONLY_TLS_1_2
+int32 sslSha1RetrieveHSHash(ssl_t *ssl, unsigned char *out)
+{
+	memcpy(out, ssl->sec.sha1Snapshot, SHA1_HASH_SIZE);
+	return SHA1_HASH_SIZE;
+}
+#endif
+#ifdef USE_SHA384
+int32 sslSha384RetrieveHSHash(ssl_t *ssl, unsigned char *out)
+{
+	memcpy(out, ssl->sec.sha384Snapshot, SHA384_HASH_SIZE);
+	return SHA384_HASH_SIZE;
+}
+#endif /* 384 */
+#endif /* SERVER, CLIENT */
 
+#if defined(USE_CLIENT_SIDE_SSL) && defined(USE_CLIENT_AUTH)
+#ifndef USE_ONLY_TLS_1_2
+/*	It is possible the certificate verify message wants a non-SHA256 hash */
+void sslSha1SnapshotHSHash(ssl_t *ssl, unsigned char *out)
+{
+	psSha1Final(&ssl->sec.msgHashSha1, out);
+}
+#endif
+#ifdef USE_SHA384
+void sslSha384SnapshotHSHash(ssl_t *ssl, unsigned char *out)
+{
+	psDigestContext_t sha384;
+
+	/* SHA384 must copy the context because it could be needed again for
+		final handshake hash.  SHA1 doesn't need this because it will
+		not ever be used again after this client auth one-off */
+	sha384 = ssl->sec.msgHashSha384;
+	psSha384Final(&sha384, out);
+}
+#endif /* USE_SHA384 */
+#endif /* USE_CLIENT_SIDE_SSL */
+#endif /* USE_TLS_1_2 */
+
+#ifdef USE_TLS
 /******************************************************************************/
 /*
-	TLS handshake has computation
+	TLS handshake hash computation
 */
 static int32 tlsGenerateFinishedHash(ssl_t *ssl, psDigestContext_t *md5,
 				psDigestContext_t *sha1, psDigestContext_t *sha256,
@@ -76,16 +147,61 @@ static int32 tlsGenerateFinishedHash(ssl_t *ssl, psDigestContext_t *md5,
 	int32			tlsTmpSize;
 
 	if (sender >= 0) {
-		memcpy(tmp, (sender & SSL_FLAGS_SERVER) ? LABEL_SERVER : LABEL_CLIENT, 
+		memcpy(tmp, (sender & SSL_FLAGS_SERVER) ? LABEL_SERVER : LABEL_CLIENT,
 			FINISHED_LABEL_SIZE);
 		tlsTmpSize = FINISHED_LABEL_SIZE + SHA1_HASH_SIZE + MD5_HASH_SIZE;
+#ifdef USE_TLS_1_2
+		if (ssl->flags & SSL_FLAGS_TLS_1_2) {
+			if (ssl->cipher->flags & CRYPTO_FLAGS_SHA3) {
+#ifdef USE_SHA384
+				psSha384Final(sha384, tmp + FINISHED_LABEL_SIZE);
+				return prf2(masterSecret, SSL_HS_MASTER_SIZE, tmp,
+					FINISHED_LABEL_SIZE + SHA384_HASH_SIZE, out,
+					TLS_HS_FINISHED_SIZE, CRYPTO_FLAGS_SHA3);
+#endif
+			} else {
+				psSha256Final(sha256, tmp + FINISHED_LABEL_SIZE);
+				return prf2(masterSecret, SSL_HS_MASTER_SIZE, tmp,
+					FINISHED_LABEL_SIZE + SHA256_HASH_SIZE, out,
+					TLS_HS_FINISHED_SIZE, CRYPTO_FLAGS_SHA2);
+			}
+#ifndef USE_ONLY_TLS_1_2
+		} else {
+			psMd5Final(md5, tmp + FINISHED_LABEL_SIZE);
+			psSha1Final(sha1, tmp + FINISHED_LABEL_SIZE + MD5_HASH_SIZE);
+			return prf(masterSecret, SSL_HS_MASTER_SIZE, tmp, tlsTmpSize,
+				out, TLS_HS_FINISHED_SIZE);
+#endif
+		}
+#else
 		psMd5Final(md5, tmp + FINISHED_LABEL_SIZE);
 		psSha1Final(sha1, tmp + FINISHED_LABEL_SIZE + MD5_HASH_SIZE);
-		return prf(masterSecret, SSL_HS_MASTER_SIZE, tmp, tlsTmpSize, 
+		return prf(masterSecret, SSL_HS_MASTER_SIZE, tmp, tlsTmpSize,
 			out, TLS_HS_FINISHED_SIZE);
+#endif
 	} else {
 		/* Overloading this function to handle the client auth needs of
 			handshake hashing. */
+#ifdef USE_TLS_1_2
+		if (ssl->flags & SSL_FLAGS_TLS_1_2) {
+			psSha256Final(sha256, out);
+#if defined(USE_SERVER_SIDE_SSL) && defined(USE_CLIENT_AUTH)
+#ifdef USE_SHA384
+			psSha384Final(sha384, ssl->sec.sha384Snapshot);
+#endif
+#ifndef USE_ONLY_TLS_1_2
+			psSha1Final(sha1, ssl->sec.sha1Snapshot);
+#endif
+#endif
+			return SHA256_HASH_SIZE;
+#ifndef USE_ONLY_TLS_1_2
+		} else {
+			psMd5Final(md5, out);
+			psSha1Final(sha1, out + MD5_HASH_SIZE);
+			return MD5_HASH_SIZE + SHA1_HASH_SIZE;
+#endif
+		}
+#else
 /*
 		The handshake snapshot for client authentication is simply the
 		appended MD5 and SHA1 hashes
@@ -93,9 +209,12 @@ static int32 tlsGenerateFinishedHash(ssl_t *ssl, psDigestContext_t *md5,
 		psMd5Final(md5, out);
 		psSha1Final(sha1, out + MD5_HASH_SIZE);
 		return MD5_HASH_SIZE + SHA1_HASH_SIZE;
+#endif
 	}
 	return PS_FAILURE; /* Should not reach this */
 }
+#endif /* USE_TLS */
+
 /******************************************************************************/
 /*
 	Snapshot is called by the receiver of the finished message to produce
@@ -107,28 +226,43 @@ int32 sslSnapshotHSHash(ssl_t *ssl, unsigned char *out, int32 senderFlag)
 #ifdef USE_TLS
 	psDigestContext_t	sha256, sha384;
 #endif
+#ifndef USE_ONLY_TLS_1_2
 	psDigestContext_t	md5, sha1;
-	int32				len;
-	
+#endif
+	int32				len = PS_FAILURE;
+
 
 /*
 	Use a backup of the message hash-to-date because we don't want
 	to destroy the state of the handshaking until truly complete
 */
+#ifdef  USE_TLS_1_2
+	if (ssl->flags & SSL_FLAGS_TLS_1_2) {
+		sha256 = ssl->sec.msgHashSha256;
+#ifdef USE_SHA384
+		sha384 = ssl->sec.msgHashSha384;
+#endif
+	}
+#endif
+#ifndef USE_ONLY_TLS_1_2
 	md5 = ssl->sec.msgHashMd5;
 	sha1 = ssl->sec.msgHashSha1;
+#endif
 
 #ifdef USE_TLS
 	if (ssl->flags & SSL_FLAGS_TLS) {
+#ifndef USE_ONLY_TLS_1_2
 		len = tlsGenerateFinishedHash(ssl, &md5, &sha1, &sha256, &sha384,
 			ssl->sec.masterSecret, out, senderFlag);
-	} else {
-#endif /* USE_TLS */
+#else
+		len = tlsGenerateFinishedHash(ssl, NULL, NULL, &sha256, &sha384,
+			ssl->sec.masterSecret, out, senderFlag);
+#endif
 #ifndef DISABLE_SSLV3
+	} else {
 		len = sslGenerateFinishedHash(&md5, &sha1, ssl->sec.masterSecret,
 			out, senderFlag);
-#endif /* DISABLE_SSLV3 */			
-#ifdef USE_TLS
+#endif /* DISABLE_SSLV3 */
 	}
 #endif /* USE_TLS */
 

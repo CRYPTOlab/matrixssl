@@ -1,68 +1,38 @@
 #
-#	makefile for MatrixSSL single process protocol testing
-#   'make' builds optimized (Default).
-#   'make debug' builds debug.
+#	Makefile for MatrixSSL testing
 #
-#	Copyright (c) INSIDE Secure Corporation 2013. All Rights Reserved
+#	Copyright (c) 2013-2015 INSIDE Secure Corporation. All Rights Reserved.
 #
 
-CC 	= gcc
-O 	= .o
-A   = .a
-E	=
+MATRIXSSL_ROOT:=../..
+TEST_SRC:=sslTest.c
+CERT_SRC:=certValidate.c
+SRC:=$(TEST_SRC) $(CERT_SRC)
 
-STATICS		= ../../libmatrixssl$(A)
+include $(MATRIXSSL_ROOT)/common.mk
 
-TEST_EXE 	= sslTest$(E) 
-TEST_OBJS 	= sslTest$(O) 
+# Generated files
+CERT_EXE:=certValidate$(E)
+TEST_EXE:=sslTest$(E)
 
-#
-# This is set by the debug target below
-#
-ifdef PS_DEBUG
-DFLAGS  = -g -Wall -DDEBUG
-else
-DFLAGS	= -Os
-endif
+# Linked files
+STATIC:=../libssl_s.a $(MATRIXSSL_ROOT)/crypto/libcrypt_s.a $(MATRIXSSL_ROOT)/core/libcore_s.a
 
-gold:
-	@$(MAKE) compile
 
-debug:
-	@$(MAKE) compile "PS_DEBUG = 1"
-
-default: gold
-
-#
-#	Compile options
-#
-CFLAGS  = $(DFLAGS) -DPOSIX -I.. -I../.. -I../../sampleCerts
-LDFLAGS = -lc
-
-#
-#   Override variables for compilation on x86-64 (AMD64, Nacona, etc)
-#
-ifeq ($(shell uname -m),x86_64)
-DFLAGS	+= -march=k8 -fPIC -DRDTSC
-endif
-
-#
-#   Override variables for compilation on Mac OS X (Darwin)
-#
-ifeq ($(shell uname),Darwin)
-CFLAGS += -isystem -I/usr/include
-LDFLAGS =
-endif
 
 all: compile
 
-compile: $(TEST_EXE)
+compile: $(OBJS) $(CERT_EXE) $(TEST_EXE)
 
-$(TEST_EXE):$(TEST_OBJS) $(STATICS)
-	$(CC) -o $@ $^ $(LDFLAGS) $(STATICS)
+# Additional Dependencies
+$(OBJS): $(MATRIXSSL_ROOT)/common.mk Makefile $(wildcard *.h)
 
-#
-#	Clean up all generated files
-#
+$(TEST_EXE): $(TEST_SRC:.c=.o) $(STATIC)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(CERT_EXE):$(CERT_SRC:.c=.o) $(STATIC)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
 clean:
-	rm -f $(TEST_EXE) $(TEST_OBJS)
+	rm -f $(TEST_EXE) $(CERT_EXE) $(OBJS)
+

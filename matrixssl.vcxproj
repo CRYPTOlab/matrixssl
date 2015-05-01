@@ -44,8 +44,8 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;MATRIXSSL_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -63,10 +63,8 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>MinSpace</Optimization>
-      <OmitFramePointers>false</OmitFramePointers>
-      <AdditionalIncludeDirectories>$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;MATRIXSSL_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -96,38 +94,50 @@
     <ClInclude Include="core\osdep.h" />
     <ClInclude Include="core\psmalloc.h" />
     <ClInclude Include="crypto\math\pstm.h" />
-    <ClInclude Include="crypto\prng\prng.h" />
     <ClInclude Include="crypto\pubkey\pubkey.h" />
+    <ClInclude Include="crypto\prng\prng.h" />
     <ClInclude Include="crypto\symmetric\symmetric.h" />
     <ClInclude Include="core\list.h" />
     <ClInclude Include="crypto\keyformat\x509.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="crypto\math\pstm_montgomery_reduce.c" />
-    <ClCompile Include="crypto\math\pstm_mul_comba.c" />
-    <ClCompile Include="crypto\math\pstm_sqr_comba.c" />
+    <ClCompile Include="crypto\digest\sha224.c" />
+    <ClCompile Include="crypto\digest\sha384.c" />
+    <ClCompile Include="crypto\digest\sha512.c" />
     <ClCompile Include="crypto\symmetric\aes.c" />
+    <ClCompile Include="crypto\symmetric\aesGCM.c" />
     <ClCompile Include="crypto\symmetric\arc4.c" />
     <ClCompile Include="crypto\keyformat\asn1.c" />
     <ClCompile Include="crypto\keyformat\base64.c" />
     <ClCompile Include="crypto\symmetric\rc2.c" />
+    <ClCompile Include="crypto\symmetric\idea.c" />
     <ClCompile Include="matrixssl\cipherSuite.c" />
+    <ClCompile Include="matrixssl\hsHash.c" />
+    <ClCompile Include="matrixssl\matrixsslApi.c" />
     <ClCompile Include="core\corelib.c" />
     <ClCompile Include="crypto\symmetric\des3.c" />
+    <ClCompile Include="crypto\pubkey\dh.c" />
+    <ClCompile Include="crypto\pubkey\ecc.c" />
     <ClCompile Include="crypto\digest\hmac.c" />
-    <ClCompile Include="matrixssl\hsHash.c" />
     <ClCompile Include="matrixssl\matrixssl.c" />
-    <ClCompile Include="matrixssl\matrixsslApi.c" />
+    <ClCompile Include="crypto\digest\md2.c" />
+    <ClCompile Include="crypto\digest\md4.c" />
     <ClCompile Include="crypto\digest\md5.c" />
     <ClCompile Include="core\win32\osdep.c" />
+    <ClCompile Include="crypto\pubkey\pkcs.c" />
+    <ClCompile Include="matrixssl\prf.c" />
+    <ClCompile Include="matrixssl\psk.c" />
+    <ClCompile Include="crypto\math\pstm.c" />
+    <ClCompile Include="crypto\math\pstm_montgomery_reduce.c" />
+    <ClCompile Include="crypto\math\pstm_mul_comba.c" />
+    <ClCompile Include="crypto\math\pstm_sqr_comba.c" />
+    <ClCompile Include="crypto\pubkey\pubkey.c" />
     <ClCompile Include="crypto\prng\prng.c" />
     <ClCompile Include="crypto\prng\yarrow.c" />
-    <ClCompile Include="crypto\pubkey\pkcs.c" />
-    <ClCompile Include="crypto\math\pstm.c" />
-    <ClCompile Include="crypto\pubkey\pubkey.c" />
     <ClCompile Include="crypto\pubkey\rsa.c" />
+    <ClCompile Include="crypto\symmetric\seed.c" />
     <ClCompile Include="crypto\digest\sha1.c" />
-    <ClCompile Include="matrixssl\prf.c" />
+    <ClCompile Include="crypto\digest\sha256.c" />
     <ClCompile Include="matrixssl\sslDecode.c" />
     <ClCompile Include="matrixssl\sslEncode.c" />
     <ClCompile Include="matrixssl\sslv3.c" />

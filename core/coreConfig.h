@@ -1,11 +1,11 @@
-/*
- *	coreConfig.h
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    coreConfig.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	Configuration settings for Matrix core module
+ *	Configuration settings for Matrix core module.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -40,7 +40,7 @@
 /******************************************************************************/
 /*
 	If enabled, calls to the psError set of APIs will perform a platform
-	abort on the exeutable to aid in debugging.  
+	abort on the exeutable to aid in debugging.
 */
 /* #define HALT_ON_PS_ERROR */ /* NOT RECOMMENDED FOR PRODUCTION BUILDS */
 
@@ -53,18 +53,17 @@
 
 /******************************************************************************/
 /*
-	Include the osdepMutex family of APIs	
+	Include the osdepMutex family of APIs
 */
 /* #define USE_MULTITHREADING */
 
 /******************************************************************************/
 /*
-	Does the platform support a native 64-bit data type (long long)?
-	Most 32 bit platforms do support native 64 bit integers, or at least can
-		accumulate 32 bit products into a 64 bit register result.
-	(Formerly this option was named USE_INT64)
+	Use C_GenerateRandom for entropy gathering
 */
-#define HAVE_NATIVE_INT64
+/* #define USE_PKCS11_ENTROPY */
+
+
 
 #endif /* _h_PS_CORECONFIG */
 /******************************************************************************/

@@ -1,9 +1,11 @@
-/*
- *	prng.h
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    prng.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
+ *
+ *	Pseudorandom Number Generator header.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -14,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -44,7 +46,11 @@
 #define AESBLOCKSIZE 16
 
 typedef struct {
-    unsigned char	pool[SHA1_HASH_SIZE]; /* hash of entropy */
+#ifdef USE_SHA256
+	unsigned char	pool[SHA256_HASH_SIZE]; /* hash of entropy */
+#else
+	unsigned char	pool[SHA1_HASH_SIZE]; /* hash of entropy */
+#endif
 	int32 mode;		/** The mode (endianess) of the CTR, 0==little, 1==big */
 	int32 ctrlen;	/** counter width */
 	int32 padlen;	/** The padding offset */
@@ -59,7 +65,6 @@ typedef struct {
 	prng.c wrapper
 */
 #define RANDOM_BYTES_BEFORE_ENTROPY	1024 /* add entropy each time # bytes read */
-#define RANDOM_CALLS_BEFORE_RESEED	32  /* Reseed context each # times called */
 #define RANDOM_ENTROPY_BYTES		8	/* Bytes of entropy from source */
 
 typedef struct {
@@ -67,7 +72,6 @@ typedef struct {
 	psYarrow_t	yarrow;
 #endif
 	uint32		bytecount; /* number of bytes read from this context */
-	uint32		callcount; /* number of times this context was called */
 } psRandom_t;
 
 

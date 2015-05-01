@@ -1,10 +1,11 @@
-/*
- *	pstm.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    pstm.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
+ *	Multiprecision number implementation.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -15,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -32,6 +33,7 @@
 /******************************************************************************/
 
 #include "../cryptoApi.h"
+#ifndef DISABLE_PSTM
 
 static int32 pstm_mul_2d(pstm_int *a, int16 b, pstm_int *c);
 
@@ -42,7 +44,7 @@ static int32 pstm_mul_2d(pstm_int *a, int16 b, pstm_int *c);
 int32 pstm_init_size(psPool_t *pool, pstm_int * a, uint32 size)
 {
 	uint16		x;
-	
+
 /*
 	alloc mem
  */
@@ -51,6 +53,7 @@ int32 pstm_init_size(psPool_t *pool, pstm_int * a, uint32 size)
 		psError("Memory allocation error in pstm_init_size\n");
 		return PSTM_MEM;
 	}
+	a->pool = pool;
 	a->used  = 0;
 	a->alloc = (int16)size;
 	a->sign  = PSTM_ZPOS;
@@ -88,6 +91,7 @@ int32 pstm_init(psPool_t *pool, pstm_int * a)
 	set the used to zero, allocated digits to the default precision and sign
 	to positive
  */
+	a->pool = pool;
 	a->used  = 0;
 	a->alloc = PSTM_DEFAULT_INIT;
 	a->sign  = PSTM_ZPOS;
@@ -102,7 +106,7 @@ int32 pstm_init(psPool_t *pool, pstm_int * a)
 int32 pstm_grow(pstm_int * a, int16 size)
 {
 	int16			i;
-	pstm_digit	*tmp;
+	pstm_digit		*tmp;
 
 /*
 	If the alloc size is smaller alloc more ram.
@@ -114,7 +118,7 @@ int32 pstm_grow(pstm_int * a, int16 size)
 		We store the return in a temporary variable in case the operation
 		failed we don't want to overwrite the dp member of a.
 */
-		tmp = psRealloc(a->dp, sizeof (pstm_digit) * size);
+		tmp = psRealloc(a->dp, sizeof (pstm_digit) * size, a->pool);
 		if (tmp == NULL) {
 /*
 			reallocation failed but "a" is still valid [can be freed]
@@ -221,7 +225,7 @@ void pstm_clear(pstm_int * a)
 /*
 	only do anything if a hasn't been freed previously
  */
-	if (a->dp != NULL) {
+	if (a != NULL && a->dp != NULL) {
 /*
 		first zero the digits
  */
@@ -229,7 +233,7 @@ void pstm_clear(pstm_int * a)
 			a->dp[i] = 0;
 		}
 
-		psFree (a->dp);
+		psFree (a->dp, a->pool);
 /*
 		reset members to make debugging easier
  */
@@ -262,7 +266,9 @@ void pstm_clear_multi(pstm_int *mp0, pstm_int *mp1, pstm_int *mp2,
 	tempArray[8] = NULL;
 
 	for (n = 0; tempArray[n] != NULL; n++) {
-		pstm_clear(tempArray[n]);
+		if ((tempArray[n] != NULL) && (tempArray[n]->dp != NULL)) {
+			pstm_clear(tempArray[n]);
+		}
 	}
 }
 
@@ -362,13 +368,13 @@ int32 pstm_init_for_read_unsigned_bin(psPool_t *pool, pstm_int *a, uint32 len)
 	int32 size;
 /*
 	Need to set this based on how many words max it will take to store the bin.
-	The magic + 2: 
+	The magic + 2:
 		1 to round up for the remainder of this integer math
 		1 for the initial carry of '1' bits that fall between DIGIT_BIT and 8
 */
 	size = (((len / sizeof(pstm_digit)) * (sizeof(pstm_digit) * CHAR_BIT))
-		/ DIGIT_BIT) + 2;	
-	return pstm_init_size(pool, a, size);	
+		/ DIGIT_BIT) + 2;
+	return pstm_init_size(pool, a, size);
 }
 
 
@@ -430,13 +436,13 @@ int32 pstm_read_unsigned_bin(pstm_int *a, unsigned char *b, int32 c)
 	/* Big enough based on the len? */
 	a->used = (((c / sizeof(pstm_digit)) * (sizeof(pstm_digit) * CHAR_BIT))
 		/ DIGIT_BIT) + 2;
-	
+
 	if (a->alloc < a->used) {
 		if (pstm_grow(a, a->used) != PSTM_OKAY) {
 			return PSTM_MEM;
 		}
 	}
-	/* read the bytes in */	
+	/* read the bytes in */
 	for (; c > 0; c--) {
 		if (pstm_mul_2d (a, 8, a) != PSTM_OKAY) {
 			return PS_MEM_FAIL;
@@ -512,7 +518,7 @@ void pstm_rshd(pstm_int *a, int16 x)
 	for (; y < a->used; y++) {
 		a->dp[y] = 0;
 	}
-   
+
 	/* decrement count */
 	a->used -= x;
 	pstm_clamp(a);
@@ -582,13 +588,13 @@ int32 pstm_2expt(pstm_int *a, int16 b)
    /* zero a as per default */
 	pstm_zero (a);
 
-	if (b < 0) { 
+	if (b < 0) {
 		return PSTM_OKAY;
 	}
 
 	z = b / DIGIT_BIT;
 	if (z >= PSTM_MAX_SIZE) {
-		return PS_LIMIT_FAIL; 
+		return PS_LIMIT_FAIL;
 	}
 
 	/* set the used count of where the bit will go */
@@ -630,7 +636,7 @@ int32 pstm_mul_2(pstm_int * a, pstm_int * b)
 
 		/* alias for source */
 		tmpa = a->dp;
-    
+
 		/* alias for dest */
 		tmpb = b->dp;
 
@@ -638,8 +644,8 @@ int32 pstm_mul_2(pstm_int * a, pstm_int * b)
 		r = 0;
 		for (x = 0; x < a->used; x++) {
 /*
-			get what will be the *next* carry bit from the 
-			MSB of the current digit 
+			get what will be the *next* carry bit from the
+			MSB of the current digit
 */
 			rr = *tmpa >> ((pstm_digit)(DIGIT_BIT - 1));
 /*
@@ -647,8 +653,8 @@ int32 pstm_mul_2(pstm_int * a, pstm_int * b)
 */
 			*tmpb++ = ((*tmpa++ << ((pstm_digit)1)) | r);
 /*
-			copy the carry that would be from the source 
-			digit into the next iteration 
+			copy the carry that would be from the source
+			digit into the next iteration
 */
 			r = rr;
 		}
@@ -660,7 +666,7 @@ int32 pstm_mul_2(pstm_int * a, pstm_int * b)
 			++(b->used);
 		}
 /*
-		now zero any excess digits on the destination that we didn't write to 
+		now zero any excess digits on the destination that we didn't write to
 */
 		tmpb = b->dp + b->used;
 		for (x = b->used; x < oldused; x++) {
@@ -693,7 +699,7 @@ int32 s_pstm_sub(pstm_int *a, pstm_int *b, pstm_int *c)
 	oldbused = b->used;
 	c->used  = a->used;
 	t = 0;
-	
+
 	for (x = 0; x < oldbused; x++) {
 		t = ((pstm_word)a->dp[x]) - (((pstm_word)b->dp[x]) + t);
 		c->dp[x] = (pstm_digit)t;
@@ -712,7 +718,7 @@ int32 s_pstm_sub(pstm_int *a, pstm_int *b, pstm_int *c)
 }
 
 /******************************************************************************/
-/* 
+/*
 	unsigned addition
 */
 static int32 s_pstm_add(pstm_int *a, pstm_int *b, pstm_int *c)
@@ -726,7 +732,7 @@ static int32 s_pstm_add(pstm_int *a, pstm_int *b, pstm_int *c)
 	}
 	oldused = c->used;
 	c->used = y;
-	
+
 	if (c->used > c->alloc) {
 		if (pstm_grow(c, c->used) != PSTM_OKAY) {
 			return PS_MEM_FAIL;
@@ -781,7 +787,7 @@ int32 pstm_sub(pstm_int *a, pstm_int *b, pstm_int *c)
 	sb = b->sign;
 
 	if (sa != sb) {
-/*	
+/*
 		subtract a negative from a positive, OR a positive from a negative.
 		For both, ADD their magnitudes, and use the sign of the first number.
  */
@@ -821,7 +827,7 @@ int32 pstm_sub_d(psPool_t *pool, pstm_int *a, pstm_digit b, pstm_int *c)
 {
 	pstm_int	tmp;
 	int32		res;
-   
+
 	if (pstm_init_size(pool, &tmp, sizeof(pstm_digit)) != PSTM_OKAY) {
 		return PS_MEM_FAIL;
 	}
@@ -839,7 +845,7 @@ int32 pstm_montgomery_setup(pstm_int *a, pstm_digit *rho)
 {
 	pstm_digit x, b;
 
-/* 
+/*
 	fast inversion mod 2**k
 	Based on the fact that
 	XA = 1 (mod 2**n)	=>  (X(2-XA)) A = 1 (mod 2**2n)
@@ -929,7 +935,7 @@ static int32 pstm_mul_2d(pstm_int *a, int16 b, pstm_int *c)
 
 	/* shift the digits */
 	if (b != 0) {
-		carry = 0;   
+		carry = 0;
 		shift = DIGIT_BIT - b;
 		for (x = 0; x < c->used; x++) {
 			carrytmp = c->dp[x] >> shift;
@@ -968,7 +974,7 @@ static int32 pstm_mod_2d(pstm_int *a, int16 b, pstm_int *c)
 	if (pstm_copy(a, c) != PSTM_OKAY) {
 		return PS_MEM_FAIL;
 	}
- 
+
 	/* if 2**d is larger than we just return */
 	if (b >= (DIGIT_BIT * a->used)) {
 		return PSTM_OKAY;
@@ -1095,9 +1101,9 @@ int32 pstm_div_2d(psPool_t *pool, pstm_int *a, int16 b, pstm_int *c,
 		}
 	}
 	pstm_clamp (c);
-	
+
 	res = PSTM_OKAY;
-LBL_DONE:	
+LBL_DONE:
 	if (d != NULL) {
 		if (pstm_copy(&t, d) != PSTM_OKAY) {
 			res = PS_MEM_FAIL;
@@ -1231,6 +1237,38 @@ static uint32 psDiv64(uint64 *numerator, uint32 denominator)
 }
 #endif /* USE_MATRIX_DIV64 */
 
+#if defined(USE_MATRIX_DIV128) && defined(PSTM_64BIT)
+typedef unsigned long	uint128 __attribute__ ((mode(TI)));
+static uint64 psDiv128(uint128 *numerator, uint64 denominator)
+{
+	uint128	rem = *numerator;
+	uint128	b = denominator;
+	uint128	res = 0;
+	uint128	d = 1;
+	uint64	high = rem >> 64;
+
+	if (high >= denominator) {
+		high /= denominator;
+		res = (uint128) high << 64;
+		rem -= (uint128) (high * denominator) << 64;
+	}
+	while ((uint128)b > 0 && b < rem) {
+		b = b+b;
+		d = d+d;
+	}
+	do {
+		if (rem >= b) {
+			rem -= b;
+			res += d;
+		}
+		b >>= 1;
+		d >>= 1;
+	} while (d);
+	*numerator = res;
+	return rem;
+}
+#endif /* USE_MATRIX_DIV128 */
+
 /******************************************************************************/
 /*
 	a/b => cb + d == a
@@ -1253,7 +1291,7 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 			if (pstm_copy(a, d) != PSTM_OKAY) {
 				return PS_MEM_FAIL;
 			}
-		} 
+		}
 		if (c != NULL) {
 			pstm_zero (c);
 		}
@@ -1312,7 +1350,7 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 	if ((res = pstm_lshd(&y, n - t)) != PSTM_OKAY) { /* y = y*b**{n-t} */
 		goto LBL_Q;
 	}
-	
+
 	while (pstm_cmp (&x, &y) != PSTM_LT) {
 		++(q.dp[n - t]);
 		if ((res = pstm_sub(&x, &y, &x)) != PSTM_OKAY) {
@@ -1329,7 +1367,7 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 			continue;
 		}
 
-		/* step 3.1 if xi == yt then set q{i-t-1} to b-1, 
+		/* step 3.1 if xi == yt then set q{i-t-1} to b-1,
 		 * otherwise set q{i-t-1} to (xi*b + x{i-1})/yt */
 		if (x.dp[i] == y.dp[t]) {
 			q.dp[i - t - 1] = (pstm_digit)((((pstm_word)1) << DIGIT_BIT) - 1);
@@ -1339,16 +1377,18 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 			tmp |= ((pstm_word) x.dp[i - 1]);
 #if defined(USE_MATRIX_DIV64) && defined(PSTM_32BIT)
 			psDiv64(&tmp, y.dp[t]);
+#elif defined(USE_MATRIX_DIV128) && defined(PSTM_64BIT)
+			psDiv128(&tmp, y.dp[t]);
 #else
 			tmp /= ((pstm_word) y.dp[t]);
 #endif /* USE_MATRIX_DIV64 */
 			q.dp[i - t - 1] = (pstm_digit) (tmp);
 		}
 
-		/* while (q{i-t-1} * (yt * b + y{t-1})) > 
-             xi * b**2 + xi-1 * b + xi-2 
-     
-			do q{i-t-1} -= 1; 
+		/* while (q{i-t-1} * (yt * b + y{t-1})) >
+			 xi * b**2 + xi-1 * b + xi-2
+
+			do q{i-t-1} -= 1;
 		*/
 		q.dp[i - t - 1] = (q.dp[i - t - 1] + 1);
 		do {
@@ -1399,7 +1439,7 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 	}
 /*
 	now q is the quotient and x is the remainder (which we have to normalize)
-*/  
+*/
 	/* get sign before writing to c */
 	x.sign = x.used == 0 ? PSTM_ZPOS : a->sign;
 
@@ -1429,9 +1469,9 @@ int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 			goto LBL_Q;
 		}
 	}
-  
+
 	res = PSTM_OKAY;
-  
+
 LBL_Q:pstm_clear (&q);
 LBL_Y:pstm_clear (&y);
 LBL_X:pstm_clear (&x);
@@ -1492,7 +1532,7 @@ int32 pstm_mulmod(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 	int32		res;
 	int16		size;
 	pstm_int	tmp;
-	
+
 /*
 	Smart-size pstm_inits.  d is an output that is influenced by this local 't'
 	so don't shrink 'd' if it wants to becuase this will lead to an pstm_grow
@@ -1516,7 +1556,7 @@ int32 pstm_mulmod(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 
 /******************************************************************************/
 /*
- *	y = g**x (mod b) 
+ *	y = g**x (mod b)
  *	Some restrictions... x must be positive and < b
  */
 int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
@@ -1549,7 +1589,7 @@ int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 /*
 	create M table
 	The M table contains powers of the input base, e.g. M[x] = G^x mod P
-	The first half of the table is not computed though accept for M[0] and M[1]
+	The first half of the table is not computed though except for M[0] and M[1]
  */
 	/* now we need R mod m */
 	if ((err = pstm_montgomery_calc_normalization (&res, P)) != PSTM_OKAY) {
@@ -1614,7 +1654,7 @@ int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 			goto LBL_PAD;
 		}
 	}
-	
+
 	/* create upper table */
 	for (x = (1 << (winsize - 1)) + 1; x < (1 << winsize); x++) {
 		if ((err = pstm_mul_comba(pool, &M[x - 1], &M[1], &M[x], paD, paDlen))
@@ -1650,7 +1690,7 @@ int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 		/* grab the next msb from the exponent */
 		y     = (pstm_digit)(buf >> (DIGIT_BIT - 1)) & 1;
 		buf <<= (pstm_digit)1;
-/* 
+/*
 		 If the bit is zero and mode == 0 then we ignore it.
 		 These represent the leading zero bits before the first 1 bit
 		 in the exponent.  Technically this opt is not required but it
@@ -1725,19 +1765,19 @@ int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 			if ((bitbuf & (1 << winsize)) != 0) {
 			/* then multiply */
 				if ((err = pstm_mul_comba(pool, &res, &M[1], &res, paD, paDlen))
-						!= PSTM_OKAY) {	
+						!= PSTM_OKAY) {
 					goto LBL_MARRAY;
 				}
 				if ((err = pstm_montgomery_reduce(pool, &res, P, mp, paD,
-						paDlen)) != PSTM_OKAY) {	
+						paDlen)) != PSTM_OKAY) {
 					goto LBL_MARRAY;
 				}
 			}
 		}
 	}
 /*
-	Fix up result if Montgomery reduction is used recall that any value in a 
-	Montgomery system is actually multiplied by R mod n.  So we have to reduce 
+	Fix up result if Montgomery reduction is used recall that any value in a
+	Montgomery system is actually multiplied by R mod n.  So we have to reduce
 	one more time to cancel out the factor of R.
 */
 	if ((err = pstm_montgomery_reduce(pool, &res, P, mp, paD, paDlen)) !=
@@ -1749,20 +1789,20 @@ int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 		goto LBL_MARRAY;
 	}
 	err = PSTM_OKAY;
-LBL_MARRAY: 
+LBL_MARRAY:
 	for (x = 1<<(winsize-1); x < (1 << winsize); x++) {
 		pstm_clear(&M[x]);
 	}
-LBL_PAD:psFree(paD);
+LBL_PAD:psFree(paD, pool);
 LBL_M: pstm_clear(&M[1]);
-LBL_RES:pstm_clear(&res);	
+LBL_RES:pstm_clear(&res);
 	return err;
 }
 
 /******************************************************************************/
 /*
 
-*/	
+*/
 int32 pstm_add(pstm_int *a, pstm_int *b, pstm_int *c)
 {
 	int32	res;
@@ -1782,8 +1822,8 @@ int32 pstm_add(pstm_int *a, pstm_int *b, pstm_int *c)
   } else {
 /*
 		one positive, the other negative
-		subtract the one with the greater magnitude from the one of the lesser 
-		magnitude. The result gets the sign of the one with the greater mag. 
+		subtract the one with the greater magnitude from the one of the lesser
+		magnitude. The result gets the sign of the one with the greater mag.
  */
 		if (pstm_cmp_mag (a, b) == PSTM_LT) {
 			c->sign = sb;
@@ -1819,7 +1859,32 @@ static void pstm_reverse (unsigned char *s, int16 len)
 		--iy;
 	}
 }
+/******************************************************************************/
+/*
+	No reverse.  Useful in some of the EIP-154 PKA stuff where special byte
+	order seems to come into play more often
+*/
+int32 pstm_to_unsigned_bin_nr(psPool_t *pool, pstm_int *a, unsigned char *b)
+{
+	int32     res;
+	int16     x;
+	pstm_int  t = { 0 };
 
+	if ((res = pstm_init_copy(pool, &t, a, 0)) != PSTM_OKAY) {
+		return res;
+	}
+
+	x = 0;
+	while (pstm_iszero (&t) == 0) {
+		b[x++] = (unsigned char) (t.dp[0] & 255);
+		if ((res = pstm_div_2d (pool, &t, 8, &t, NULL)) != PSTM_OKAY) {
+			pstm_clear(&t);
+			return res;
+		}
+	}
+	pstm_clear(&t);
+	return PS_SUCCESS;
+}
 /******************************************************************************/
 /*
 
@@ -1828,7 +1893,7 @@ int32 pstm_to_unsigned_bin(psPool_t *pool, pstm_int *a, unsigned char *b)
 {
 	int32     res;
 	int16     x;
-	pstm_int  t;
+	pstm_int  t = { 0 };
 
 	if ((res = pstm_init_copy(pool, &t, a, 0)) != PSTM_OKAY) {
 		return res;
@@ -1849,7 +1914,7 @@ int32 pstm_to_unsigned_bin(psPool_t *pool, pstm_int *a, unsigned char *b)
 
 /******************************************************************************/
 /*
-	compare against a single digit 
+	compare against a single digit
 */
 int32 pstm_cmp_d(pstm_int *a, pstm_digit b)
 {
@@ -1873,4 +1938,325 @@ int32 pstm_cmp_d(pstm_int *a, pstm_digit b)
 	}
 }
 
+/*
+	Need invmod for ECC and also private key loading for hardware crypto
+	in cases where dQ > dP.  The values must be switched and a new qP must be
+	calculated using this function
+*/
+static int32 pstm_invmod_slow(psPool_t *pool, pstm_int * a, pstm_int * b,
+				pstm_int * c)
+{
+	pstm_int  x, y, u, v, A, B, C, D;
+	int32     res;
+
+	/* b cannot be negative */
+	if (b->sign == PSTM_NEG || pstm_iszero(b) == 1) {
+		return PS_LIMIT_FAIL;
+	}
+
+	/* init temps */
+	if (pstm_init_size(pool, &x, b->used) != PSTM_OKAY) {
+		return PS_MEM_FAIL;
+	}
+
+	/* x = a, y = b */
+	if ((res = pstm_mod(pool, a, b, &x)) != PSTM_OKAY) {
+		goto LBL_X;
+	}
+
+	if (pstm_init_copy(pool, &y, b, 0) != PSTM_OKAY) {
+		goto LBL_X;
+	}
+
+	/* 2. [modified] if x,y are both even then return an error! */
+	if (pstm_iseven (&x) == 1 && pstm_iseven (&y) == 1) {
+		res = PS_FAILURE;
+		goto LBL_Y;
+	}
+
+	/* 3. u=x, v=y, A=1, B=0, C=0,D=1 */
+	if ((res = pstm_init_copy(pool, &u, &x, 0)) != PSTM_OKAY) {
+		goto LBL_Y;
+	}
+	if ((res = pstm_init_copy(pool, &v, &y, 0)) != PSTM_OKAY) {
+		goto LBL_U;
+	}
+
+	if ((res = pstm_init_size(pool, &A, sizeof(pstm_digit))) != PSTM_OKAY) {
+		goto LBL_V;
+	}
+
+	if ((res = pstm_init_size(pool, &D, sizeof(pstm_digit))) != PSTM_OKAY) {
+		goto LBL_A;
+	}
+	pstm_set (&A, 1);
+	pstm_set (&D, 1);
+
+	if ((res = pstm_init(pool, &B)) != PSTM_OKAY) {
+		goto LBL_D;
+	}
+	if ((res = pstm_init(pool, &C)) != PSTM_OKAY) {
+		goto LBL_B;
+	}
+
+top:
+	/* 4.  while u is even do */
+	while (pstm_iseven (&u) == 1) {
+		/* 4.1 u = u/2 */
+		if ((res = pstm_div_2 (&u, &u)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+
+		/* 4.2 if A or B is odd then */
+		if (pstm_isodd (&A) == 1 || pstm_isodd (&B) == 1) {
+			/* A = (A+y)/2, B = (B-x)/2 */
+			if ((res = pstm_add (&A, &y, &A)) != PSTM_OKAY) {
+				goto LBL_C;
+			}
+			if ((res = pstm_sub (&B, &x, &B)) != PSTM_OKAY) {
+				goto LBL_C;
+			}
+		}
+		/* A = A/2, B = B/2 */
+		if ((res = pstm_div_2 (&A, &A)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+		if ((res = pstm_div_2 (&B, &B)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+	}
+
+	/* 5.  while v is even do */
+	while (pstm_iseven (&v) == 1) {
+		/* 5.1 v = v/2 */
+		if ((res = pstm_div_2 (&v, &v)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+
+		/* 5.2 if C or D is odd then */
+		if (pstm_isodd (&C) == 1 || pstm_isodd (&D) == 1) {
+			/* C = (C+y)/2, D = (D-x)/2 */
+			if ((res = pstm_add (&C, &y, &C)) != PSTM_OKAY) {
+				goto LBL_C;
+			}
+			if ((res = pstm_sub (&D, &x, &D)) != PSTM_OKAY) {
+				goto LBL_C;
+			}
+		}
+		/* C = C/2, D = D/2 */
+		if ((res = pstm_div_2 (&C, &C)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+		if ((res = pstm_div_2 (&D, &D)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+	}
+
+	/* 6.  if u >= v then */
+	if (pstm_cmp (&u, &v) != PSTM_LT) {
+		/* u = u - v, A = A - C, B = B - D */
+		if ((res = pstm_sub (&u, &v, &u)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+		if ((res = pstm_sub (&A, &C, &A)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+		if ((res = pstm_sub (&B, &D, &B)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+	} else {
+		/* v - v - u, C = C - A, D = D - B */
+		if ((res = pstm_sub (&v, &u, &v)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+		if ((res = pstm_sub (&C, &A, &C)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+		if ((res = pstm_sub (&D, &B, &D)) != PSTM_OKAY) {
+				goto LBL_C;
+		}
+	}
+
+	/* if not zero goto step 4 */
+	if (pstm_iszero (&u) == 0)
+		goto top;
+
+	/* now a = C, b = D, gcd == g*v */
+
+	/* if v != 1 then there is no inverse */
+	if (pstm_cmp_d (&v, 1) != PSTM_EQ) {
+		res = PS_FAILURE;
+		goto LBL_C;
+	}
+
+	/* if its too low */
+	while (pstm_cmp_d(&C, 0) == PSTM_LT) {
+		if ((res = pstm_add(&C, b, &C)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+	}
+
+	/* too big */
+	while (pstm_cmp_mag(&C, b) != PSTM_LT) {
+		if ((res = pstm_sub(&C, b, &C)) != PSTM_OKAY) {
+			goto LBL_C;
+		}
+	}
+
+	/* C is now the inverse */
+	if ((res = pstm_copy(&C, c)) != PSTM_OKAY) {
+		goto LBL_C;
+	}
+	res = PSTM_OKAY;
+
+LBL_C: pstm_clear(&C);
+LBL_D: pstm_clear(&D);
+LBL_B: pstm_clear(&B);
+LBL_A: pstm_clear(&A);
+LBL_V: pstm_clear(&v);
+LBL_U: pstm_clear(&u);
+LBL_Y: pstm_clear(&y);
+LBL_X: pstm_clear(&x);
+
+	return res;
+}
+
+/* c = 1/a (mod b) for odd b only */
+int32 pstm_invmod(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c)
+{
+	pstm_int	x, y, u, v, B, D;
+	int32		res;
+	uint16		neg, sanity;
+
+	/* 2. [modified] b must be odd   */
+	if (pstm_iseven (b) == 1) {
+		return pstm_invmod_slow(pool, a,b,c);
+	}
+
+	/* x == modulus, y == value to invert */
+	if ((res = pstm_init_copy(pool, &x, b, 0)) != PSTM_OKAY) {
+		return res;
+	}
+
+	if ((res = pstm_init_size(pool, &y, a->alloc)) != PSTM_OKAY) {
+		goto LBL_X;
+	}
+
+	/* we need y = |a| */
+	pstm_abs(a, &y);
+
+	/* 3. u=x, v=y, A=1, B=0, C=0,D=1 */
+	if ((res = pstm_init_copy(pool, &u, &x, 0)) != PSTM_OKAY) {
+		goto LBL_Y;
+	}
+	if ((res = pstm_init_copy(pool, &v, &y, 0)) != PSTM_OKAY) {
+		goto LBL_U;
+	}
+	if ((res = pstm_init(pool, &B)) != PSTM_OKAY) {
+		goto LBL_V;
+	}
+	if ((res = pstm_init(pool, &D)) != PSTM_OKAY) {
+		goto LBL_B;
+	}
+
+	pstm_set (&D, 1);
+
+	sanity = 0;
+top:
+	/* 4.  while u is even do */
+	while (pstm_iseven (&u) == 1) {
+		/* 4.1 u = u/2 */
+		if ((res = pstm_div_2 (&u, &u)) != PSTM_OKAY) {
+			goto LBL_D;
+		}
+
+		/* 4.2 if B is odd then */
+		if (pstm_isodd (&B) == 1) {
+			if ((res = pstm_sub (&B, &x, &B)) != PSTM_OKAY) {
+				goto LBL_D;
+			}
+		}
+		/* B = B/2 */
+		if ((res = pstm_div_2 (&B, &B)) !=  PSTM_OKAY) {
+			goto LBL_D;
+		}
+	}
+
+	/* 5.  while v is even do */
+	while (pstm_iseven (&v) == 1) {
+		/* 5.1 v = v/2 */
+		if ((res = pstm_div_2 (&v, &v)) != PSTM_OKAY) {
+			goto LBL_D;
+		}
+		/* 5.2 if D is odd then */
+		if (pstm_isodd (&D) == 1) {
+			/* D = (D-x)/2 */
+			if ((res = pstm_sub (&D, &x, &D)) != PSTM_OKAY) {
+				goto LBL_D;
+			}
+		}
+		/* D = D/2 */
+		if ((res = pstm_div_2 (&D, &D)) !=  PSTM_OKAY) {
+			goto LBL_D;
+		}
+	}
+
+	/* 6.  if u >= v then */
+	if (pstm_cmp (&u, &v) != PSTM_LT) {
+		/* u = u - v, B = B - D */
+		if ((res = pstm_sub (&u, &v, &u)) != PSTM_OKAY) {
+				goto LBL_D;
+		}
+		if ((res = pstm_sub (&B, &D, &B)) != PSTM_OKAY) {
+				goto LBL_D;
+		}
+	} else {
+		/* v - v - u, D = D - B */
+		if ((res = pstm_sub (&v, &u, &v)) != PSTM_OKAY) {
+				goto LBL_D;
+		}
+		if ((res = pstm_sub (&D, &B, &D)) != PSTM_OKAY) {
+				goto LBL_D;
+		}
+	}
+
+	/* if not zero goto step 4 */
+	if (sanity++ > 1000) {
+		res = PS_LIMIT_FAIL;
+		goto LBL_D;
+	}
+	if (pstm_iszero (&u) == 0) {
+		goto top;
+	}
+
+	/* now a = C, b = D, gcd == g*v */
+
+	/* if v != 1 then there is no inverse */
+	if (pstm_cmp_d (&v, 1) != PSTM_EQ) {
+		res = PS_FAILURE;
+		goto LBL_D;
+	}
+
+	/* b is now the inverse */
+	neg = a->sign;
+	while (D.sign == PSTM_NEG) {
+		if ((res = pstm_add (&D, b, &D)) != PSTM_OKAY) {
+			goto LBL_D;
+		}
+	}
+	if ((res = pstm_copy (&D, c)) != PSTM_OKAY) {
+		goto LBL_D;
+	}
+	c->sign = neg;
+	res = PSTM_OKAY;
+
+LBL_D: pstm_clear(&D);
+LBL_B: pstm_clear(&B);
+LBL_V: pstm_clear(&v);
+LBL_U: pstm_clear(&u);
+LBL_Y: pstm_clear(&y);
+LBL_X: pstm_clear(&x);
+	return res;
+}
+#endif /* !DISABLE_PSTM */
 /******************************************************************************/

@@ -1,3 +1,9 @@
+/**
+ *	@file    SslHelper.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
+ *
+ *	Summary.
+ */
 // A simple class for wrapping the MatrixSSL calls.
 
 #import <Foundation/Foundation.h>
@@ -9,13 +15,13 @@
 
 @interface SslHelper : NSObject
 {
-    // Connect to the following IP address and port.
-    NSString* ipAddress;
-    int32 port;
+	// Connect to the following IP address and port.
+	NSString* ipAddress;
+	int32 port;
 
-    // Our delegate object for receiving data and status messages about the
-    // SSL connection.
-    id<SslDelegateProtocol> delegate;
+	// Our delegate object for receiving data and status messages about the
+	// SSL connection.
+	id<SslDelegateProtocol> delegate;
 }
 
 

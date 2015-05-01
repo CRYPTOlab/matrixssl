@@ -1,11 +1,11 @@
-/*
- *	prf.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    prf.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	"Native" Pseudo Random Function
+ *	"Native" Pseudo Random Function.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -35,11 +35,12 @@
 #include "matrixsslApi.h"
 
 #ifdef USE_TLS
+#ifndef USE_ONLY_TLS_1_2
 /******************************************************************************/
 /*
 	MD5 portions of the prf
 */
-static int32 pMd5(unsigned char *key, uint32 keyLen, 
+static int32 pMd5(unsigned char *key, uint32 keyLen,
 				unsigned char *text, uint32 textLen,
 				unsigned char *out, uint32 outLen)
 {
@@ -83,7 +84,7 @@ static int32 pMd5(unsigned char *key, uint32 keyLen,
 /*
 	SHA1 portion of the prf
 */
-static int32 pSha1(unsigned char *key, uint32 keyLen, 
+static int32 pSha1(unsigned char *key, uint32 keyLen,
 					unsigned char *text, uint32 textLen,
 					unsigned char *out, uint32 outLen)
 {
@@ -125,7 +126,6 @@ static int32 pSha1(unsigned char *key, uint32 keyLen,
 	return 0;
 }
 
-
 /******************************************************************************/
 /*
 	Psuedo-random function.  TLS uses this for key generation and hashing
@@ -151,6 +151,81 @@ int32 prf(unsigned char *sec, uint32 secLen, unsigned char *seed,
 	return outLen;
 }
 
+#endif /* !USE_ONLY_TLS_1_2 */
+
+#ifdef USE_TLS_1_2
+/******************************************************************************/
+/*
+	SHA2 prf
+*/
+static int32 pSha2(unsigned char *key, uint32 keyLen,
+					unsigned char *text, uint32 textLen,
+					unsigned char *out, uint32 outLen, uint32 flags)
+{
+	psHmacContext_t	ctx;
+	unsigned char		a[SHA384_HASH_SIZE];
+	unsigned char		mac[SHA384_HASH_SIZE];
+	unsigned char		hmacKey[SHA384_HASH_SIZE];
+	int32				i, hashSize, keyIter = 1;
+	uint32				hmacKeyLen;
+
+	if (flags & CRYPTO_FLAGS_SHA3) {
+		hashSize = SHA384_HASH_SIZE;
+
+	} else {
+		hashSize = SHA256_HASH_SIZE;
+	}
+	while ((uint32)(hashSize * keyIter) < outLen) {
+		keyIter++;
+	}
+	psHmacSha2(key, keyLen, text, textLen, a, hmacKey, &hmacKeyLen, hashSize);
+	if (hmacKeyLen != keyLen) {
+/*
+		Support for keys larger than 64 bytes.  Must take the hash of
+		the original key in these cases which is indicated by different
+		outgoing values from the passed in key and keyLen values
+*/
+		psAssert(keyLen > 64);
+		key = hmacKey;
+		keyLen = hmacKeyLen;
+	}
+	for (i = 0; i < keyIter; i++) {
+		psHmacSha2Init(&ctx, key, keyLen, hashSize);
+		psHmacSha2Update(&ctx, a, hashSize, hashSize);
+		psHmacSha2Update(&ctx, text, textLen, hashSize);
+		psHmacSha2Final(&ctx, mac, hashSize);
+		if (i == keyIter - 1) {
+			memcpy(out + (hashSize * i), mac,
+				outLen - (hashSize * i));
+		} else {
+			memcpy(out + (hashSize * i), mac, hashSize);
+			psHmacSha2(key, keyLen, a, hashSize, a, hmacKey,
+				&hmacKeyLen, hashSize);
+		}
+	}
+	return 0;
+}
+
+/******************************************************************************/
+/*
+	Psuedo-random function.  TLS uses this for key generation and hashing
+*/
+int32 prf2(unsigned char *sec, uint32 secLen, unsigned char *seed,
+			   uint32 seedLen, unsigned char *out, uint32 outLen, uint32 flags)
+{
+	unsigned char	sha2out[SSL_MAX_KEY_BLOCK_SIZE];
+	uint32			i;
+
+	psAssert(outLen <= SSL_MAX_KEY_BLOCK_SIZE);
+
+	pSha2(sec, secLen, seed, seedLen, sha2out, outLen, flags);
+	for (i = 0; i < outLen; i++) {
+		out[i] = sha2out[i];
+	}
+	return outLen;
+}
+
+#endif /* USE_TLS_1_2 */
 #endif /* USE_TLS */
 /******************************************************************************/
 

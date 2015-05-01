@@ -1,9 +1,11 @@
-/*
- *	cryptolib.h
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    cryptolib.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
+ *
+ *	Header file for definitions used with crypto lib.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -14,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -33,13 +35,15 @@
 #ifndef _h_PS_CRYPTOLIB
 #define _h_PS_CRYPTOLIB
 
+#ifdef USE_PKCS11
+#include "cryptoki.h" /* #include "pkcs11.h" */
+#endif
+#ifdef USE_AESNI_CRYPTO
+#include "hardware/aesni.h"
+#endif
 #include "symmetric/symmetric.h"
-#include "digest/digest.h"
 #include "math/pstm.h"
-#include "pubkey/pubkey.h"
-#include "keyformat/asn1.h"
-#include "keyformat/x509.h"
-#include "prng/prng.h"
+
 
 /******************************************************************************/
 /*
@@ -48,15 +52,15 @@
 #ifdef USE_CERT_PARSE
 	#ifndef USE_X509
 	#error "Must enable USE_X509 if USE_CERT_PARSE is enabled"
-	#endif	
+	#endif
 	#if !defined(USE_MD5) || !defined(USE_SHA1)
 	#error "Both USE_MD5 and USE_SHA1 must be enabled when enabling USE_X509"
 	#endif
-#endif 
+#endif
 
 #ifdef USE_HMAC
-	#if !defined(USE_MD5) && !defined(USE_SHA1)
-	#error "Must enable either MD5 or SHA1 in cryptoConfig.h for HMAC support"
+	#if !defined(USE_SHA1) && !defined(USE_SHA256) && !defined(USE_SHA384)
+	#error "Must enable a SHA based hash in cryptoConfig.h for HMAC support"
 	#endif
 #endif
 
@@ -67,12 +71,29 @@
 	#ifndef USE_3DES
 	#error "Enable USE_3DES in cryptoConfig.h for PKCS5 support"
 	#endif
+	#ifndef USE_AES
+	#error "Enable USE_AES in cryptoConfig.h for PKCS5 support"
+	#endif
 #endif
 
 #ifdef USE_PKCS8
-	#ifndef USE_HMAC 
+	#ifndef USE_HMAC
 	#error "Enable USE_HMAC in cryptoConfig.h for PKCS8 support"
 	#endif
+#endif
+
+#ifdef USE_PKCS11
+	#ifdef USE_RSA
+	#error "Currently no RSA support for PKCS#11 builds.  Disable USE_RSA"
+	#endif
+	#define USE_UNIFIED_PKCS11 /* TLS integration is mandatory right now */
+	#define USE_PKCS11_ECC
+	#define USE_PKCS11_AES
+	#define USE_PKCS11_HASH
+#else
+	#define USE_NATIVE_ECC
+	#define USE_NATIVE_AES
+	#define USE_NATIVE_HASH
 #endif
 
 #ifdef USE_PKCS12
@@ -81,13 +102,19 @@
 	#endif
 #endif
 
+#include "digest/digest.h"
+#include "pubkey/pubkey.h"
+#include "keyformat/asn1.h"
+#include "keyformat/x509.h"
+#include "prng/prng.h"
+
 /******************************************************************************/
 /*
 	Crypto trace
 */
 #ifndef USE_CRYPTO_TRACE
-#define psTraceCrypto(x) 
-#define psTraceStrCrypto(x, y) 
+#define psTraceCrypto(x)
+#define psTraceStrCrypto(x, y)
 #define psTraceIntCrypto(x, y)
 #define psTracePtrCrypto(x, y)
 #else
@@ -103,46 +130,71 @@
 	Helpers
 */
 extern int32 psBase64decode(const unsigned char *in,  uint32 len,
-                    unsigned char *out, uint32 *outlen);
+					unsigned char *out, uint32 *outlen);
+extern void psOpenPrng(void);
+extern void psClosePrng(void);
+extern int32 matrixCryptoGetPrngData(unsigned char *bytes, uint32 size,
+					void *userPtr);
 
 /******************************************************************************/
 /*
-    RFC 3279 OID
-    Matrix uses an oid summing mechanism to arrive at these defines.
+	RFC 3279 OID
+	Matrix uses an oid summing mechanism to arrive at these defines.
 	The byte values of the OID are summed to produce a "relatively unique" int
 
-    The duplicate defines do not pose a problem as long as they don't 
-    exist in the same OID groupings
+	The duplicate defines do not pose a problem as long as they don't
+	exist in the same OID groupings
 */
-#ifdef USE_X509
 /* Raw digest algorithms */
 #define OID_SHA1_ALG			88
 #define OID_SHA256_ALG			414
+#define OID_SHA384_ALG			415
 #define OID_SHA512_ALG			416
 #define OID_MD2_ALG				646
 #define OID_MD5_ALG				649
 
 /* Signature algorithms */
-#define OID_MD2_RSA_SIG			646 
+#define OID_MD2_RSA_SIG			646
 #define OID_MD5_RSA_SIG			648 /* 42.134.72.134.247.13.1.1.4 */
 #define OID_SHA1_RSA_SIG		649 /* 42.134.72.134.247.13.1.1.5 */
+#define OID_ID_MGF1				652 /* 42.134.72.134.247.13.1.1.8 */
+#define OID_RSASSA_PSS			654 /* 42.134.72.134.247.13.1.1.10 */
 #define OID_SHA256_RSA_SIG		655 /* 42.134.72.134.247.13.1.1.11 */
-#define OID_SHA384_RSA_SIG		656 /* 42.134.72.134.247.13.1.1.11 */
+#define OID_SHA384_RSA_SIG		656 /* 42.134.72.134.247.13.1.1.12 */
 #define OID_SHA512_RSA_SIG		657 /* 42.134.72.134.247.13.1.1.13 */
 #define OID_SHA1_ECDSA_SIG		520	/* 42.134.72.206.61.4.1 */
 #define OID_SHA224_ECDSA_SIG	523 /* 42.134.72.206.61.4.3.1 */
 #define OID_SHA256_ECDSA_SIG	524 /* 42.134.72.206.61.4.3.2 */
 #define OID_SHA384_ECDSA_SIG	525 /* 42.134.72.206.61.4.3.3 */
 #define OID_SHA512_ECDSA_SIG	526 /* 42.134.72.206.61.4.3.4 */
-#endif /* USE_X509 */
 
 /* Public key algorithms */
-#define OID_RSA_KEY_ALG			645 /* 42.134.72.134.247.13.1.1.1 */
-#define OID_ECDSA_KEY_ALG		518 /* 42.134.72.206.61.2.1 */
+#define OID_RSA_KEY_ALG			645
+#define OID_ECDSA_KEY_ALG		518 /* 1.2.840.10045.2.1 */
+
+/* Encryption algorithms */
+#define OID_DES_EDE3_CBC		652 /* 42.134.72.134.247.13.3.7 */
+#define OID_AES_128_CBC			414	/* 2.16.840.1.101.3.4.1.2 */
+#define OID_AES_128_WRAP		417 /* 2.16.840.1.101.3.4.1.5 */
+#define OID_AES_128_GCM			418 /* 2.16.840.1.101.3.4.1.6 */
+#define OID_AES_192_CBC			434	/* 2.16.840.1.101.3.4.1.22 */
+#define OID_AES_192_WRAP		437	/* 2.16.840.1.101.3.4.1.25 */
+#define OID_AES_192_GCM			438	/* 2.16.840.1.101.3.4.1.26 */
+#define OID_AES_256_CBC			454 /* 2.16.840.1.101.3.4.1.42 */
+#define OID_AES_256_WRAP		457 /* 2.16.840.1.101.3.4.1.45 */
+#define OID_AES_256_GCM			458	/* 2.16.840.1.101.3.4.1.46 */
+
+								/* TODO: Made this up.  Couldn't find */
+#define OID_AES_CMAC			612	/* 2.16.840.1.101.3.4.1.200 */
+
+/* TODO: These are not officially defined yet */
+#define OID_AES_CBC_CMAC_128	143
+#define OID_AES_CBC_CMAC_192	144
+#define OID_AES_CBC_CMAC_256	145
+
+#define OID_AUTH_ENC_256_SUM	687 /* The RFC 6476 authEnc OID */
 
 #ifdef USE_PKCS5
-#define OID_DES_EDE3_CBC		652 /* 42.134.72.134.247.13.3.7 */
-
 #define OID_PKCS_PBKDF2			660 /* 42.134.72.134.247.13.1.5.12 */
 #define OID_PKCS_PBES2			661 /* 42.134.72.134.247.13.1.5.13 */
 #endif /* USE_PKCS5 */
@@ -154,13 +206,6 @@ extern int32 psBase64decode(const unsigned char *in,  uint32 len,
 #define OID_PKCS_PBESHA3DES2	660 /* warning: collision with pkcs5 */
 #define OID_PKCS_PBESHA128RC2	661 /* warning: collision with pkcs5 */
 #define OID_PKCS_PBESHA40RC2	662
-
-#define PKCS7_DATA					651
-#define PKCS7_SIGNED_DATA			652
-#define PKCS7_ENVELOPED_DATA		653
-#define PKCS7_SIGNED_ENVELOPED_DATA	654
-#define PKCS7_DIGESTED_DATA			655
-#define PKCS7_ENCRYPTED_DATA		656
 
 #define PKCS12_BAG_TYPE_KEY			667
 #define PKCS12_BAG_TYPE_SHROUD		668
@@ -180,7 +225,23 @@ extern int32 psBase64decode(const unsigned char *in,  uint32 len,
 
 #define PKCS9_CERT_TYPE_X509		675
 #define PKCS9_CERT_TYPE_SDSI		676
+
+#define PKCS7_DATA					651
+/* signedData 1.2.840.113549.1.7.2  (2A 86 48 86 F7 0D 01 07 02) */
+#define PKCS7_SIGNED_DATA			652
+#define PKCS7_ENVELOPED_DATA		653
+#define PKCS7_SIGNED_ENVELOPED_DATA	654
+#define PKCS7_DIGESTED_DATA			655
+#define PKCS7_ENCRYPTED_DATA		656
 #endif /* USE_PKCS12 */
+
+#if defined(USE_PKCS1_OAEP) || defined(USE_PKCS1_PSS)
+#define PKCS1_SHA1_ID	0
+#define PKCS1_MD5_ID	1
+#define PKCS1_SHA256_ID	2
+#define PKCS1_SHA384_ID 3
+#define PKCS1_SHA512_ID 4
+#endif
 
 /******************************************************************************/
 /* These values are all mutually exlusive bits to define Cipher flags */
@@ -199,17 +260,18 @@ extern int32 psBase64decode(const unsigned char *in,  uint32 len,
 #define CRYPTO_FLAGS_TLS_1_2	0x400
 
 #define CRYPTO_FLAGS_INBOUND	0x800
-#define CRYPTO_FLAGS_ARC4INIT	0x1000
-#define CRYPTO_FLAGS_BLOCKING	0x2000
+#define CRYPTO_FLAGS_ARC4INITE	0x1000 /* Encrypt init */
+#define CRYPTO_FLAGS_ARC4INITD	0x2000 /* Decrypt init */
+#define CRYPTO_FLAGS_BLOCKING	0x4000
 
-#define CRYPTO_FLAGS_DISABLED	0x4000
-#define CRYPTO_FLAGS_GCM		0x8000
+#define CRYPTO_FLAGS_DISABLED	0x8000
+#define CRYPTO_FLAGS_GCM		0x10000
 
-#define CRYPTO_FLAGS_SHA3		0x10000 /* SHA-384 */
+#define CRYPTO_FLAGS_SHA3		0x20000 /* SHA-384 */
 
 /******************************************************************************/
 
-#define	CRYPT_INVALID_KEYSIZE	-21 
+#define	CRYPT_INVALID_KEYSIZE	-21
 #define	CRYPT_INVALID_ROUNDS	-22
 
 /******************************************************************************/
@@ -231,16 +293,16 @@ extern int32 psBase64decode(const unsigned char *in,  uint32 len,
 static inline unsigned ROL(unsigned word, int i)
 {
    asm ("roll %%cl,%0"
-      :"=r" (word)
-      :"0" (word),"c" (i));
+	  :"=r" (word)
+	  :"0" (word),"c" (i));
    return word;
 }
 
 static inline unsigned ROR(unsigned word, int i)
 {
    asm ("rorl %%cl,%0"
-      :"=r" (word)
-      :"0" (word),"c" (i));
+	  :"=r" (word)
+	  :"0" (word),"c" (i));
    return word;
 }
 
@@ -269,36 +331,9 @@ static inline unsigned ROR(unsigned word, int i)
 
 /******************************************************************************/
 /*
- Controls endianess and size of registers.  Leave uncommented to get
- platform neutral [slower] code detect x86-32 machines somewhat
- */
-#if (defined(_MSC_VER) && defined(WIN32)) || \
-(defined(__GNUC__) && (defined(__DJGPP__) || defined(__CYGWIN__) || \
-defined(__MINGW32__) || defined(__i386__)))
-#define ENDIAN_LITTLE
-#define ENDIAN_32BITWORD
-#endif
-
-/* #define ENDIAN_LITTLE */
-/* #define ENDIAN_BIG */
-
-/* #define ENDIAN_32BITWORD */
-/* #define ENDIAN_64BITWORD */
-
-#if (defined(ENDIAN_BIG) || defined(ENDIAN_LITTLE)) && \
-!(defined(ENDIAN_32BITWORD) || defined(ENDIAN_64BITWORD))
-#error You must specify a word size as well as endianess
-#endif
-
-#if !(defined(ENDIAN_BIG) || defined(ENDIAN_LITTLE))
-#define ENDIAN_NEUTRAL
-#endif
-
-/*
- helper macros
+	Endian helper macros
  */
 #if defined (ENDIAN_NEUTRAL)
-
 #define STORE32L(x, y) { \
 (y)[3] = (unsigned char)(((x)>>24)&255); \
 (y)[2] = (unsigned char)(((x)>>16)&255);  \
@@ -366,7 +401,6 @@ x = (((uint64)((y)[0] & 255))<<56)|(((uint64)((y)[1] & 255))<<48) | \
 #endif /* ENDIAN_NEUTRAL */
 
 #ifdef ENDIAN_LITTLE
-
 #define STORE32H(x, y) { \
 (y)[0] = (unsigned char)(((x)>>24)&255); \
 (y)[1] = (unsigned char)(((x)>>16)&255); \
@@ -398,8 +432,7 @@ x = (((uint64)((y)[0] & 255))<<56)|(((uint64)((y)[1] & 255))<<48) | \
 (((uint64)((y)[4] & 255))<<24)|(((uint64)((y)[5] & 255))<<16) | \
 (((uint64)((y)[6] & 255))<<8)|(((uint64)((y)[7] & 255))); }
 
-#ifdef ENDIAN_32BITWORD 
-
+#ifdef ENDIAN_32BITWORD
 #define STORE32L(x, y) { \
 unsigned long __t = (x); memcpy(y, &__t, 4); \
 }
@@ -425,7 +458,6 @@ x = (((uint64)((y)[7] & 255))<<56)|(((uint64)((y)[6] & 255))<<48)| \
 }
 
 #else /* 64-bit words then  */
-
 #define STORE32L(x, y) \
 { unsigned long __t = (x); memcpy(y, &__t, 4); }
 
@@ -442,7 +474,6 @@ x = (((uint64)((y)[7] & 255))<<56)|(((uint64)((y)[6] & 255))<<48)| \
 #endif /* ENDIAN_LITTLE */
 
 #ifdef ENDIAN_BIG
-
 #define STORE32L(x, y) { \
 (y)[3] = (unsigned char)(((x)>>24)&255); \
 (y)[2] = (unsigned char)(((x)>>16)&255); \
@@ -475,10 +506,9 @@ x = (((uint64)((y)[7] & 255))<<56)|(((uint64)((y)[6] & 255))<<48) | \
 (((uint64)((y)[1] & 255))<<8)|(((uint64)((y)[0] & 255))); \
 }
 
-#ifdef ENDIAN_32BITWORD 
-
+#ifdef ENDIAN_32BITWORD
 #define STORE32H(x, y) \
-{ unsigned long __t = (x); memcpy(y, &__t, 4); }
+{ unsigned int __t = (x); memcpy(y, &__t, 4); }
 
 #define LOAD32H(x, y) memcpy(&(x), y, 4);
 
@@ -525,7 +555,7 @@ x = (((uint64)((y)[0] & 255))<<56)|(((uint64)((y)[1] & 255))<<48)| \
 #define ROR64c(x, y) \
 ( ((((x)&CONST64(0xFFFFFFFFFFFFFFFF))>>((uint64)(y)&CONST64(63))) | \
 ((x)<<((uint64)(64-((y)&CONST64(63)))))) & CONST64(0xFFFFFFFFFFFFFFFF))
-#endif /* HAVE_NATIVE_INT64 */	  
+#endif /* HAVE_NATIVE_INT64 */
 /******************************************************************************/
 
 
@@ -540,6 +570,25 @@ x = (((uint64)((y)[0] & 255))<<56)|(((uint64)((y)[1] & 255))<<48)| \
 #define psPadLenPwr2(LEN, BLOCKSIZE) \
 	BLOCKSIZE <= 1 ? (unsigned char)0 : \
 	(unsigned char)(BLOCKSIZE - ((LEN) & (BLOCKSIZE - 1)))
+
+
+#ifdef USE_PKCS11
+
+/* #define PKCS11_STATS */
+#ifdef PKCS11_STATS
+extern void pkcs11RegisterObj(CK_SESSION_HANDLE ses, CK_OBJECT_HANDLE obj);
+extern void pkcs11ShowObjects();
+#endif
+extern CK_RV pkcs11Init(CK_C_INITIALIZE_ARGS *args);
+extern CK_RV pkcs11Close(void);
+extern CK_RV pkcs11OpenSession(CK_SESSION_HANDLE *session, int32 flags);
+extern void pkcs11CloseSession(CK_SESSION_HANDLE session);
+extern CK_RV pkcs11CreateObject(CK_SESSION_HANDLE session,
+				CK_ATTRIBUTE *pTemplate, CK_ULONG ulCount,
+				CK_OBJECT_HANDLE *phObject);
+extern CK_RV pkcs11DestroyObject(CK_SESSION_HANDLE session,
+				CK_OBJECT_HANDLE object);
+#endif
 
 
 #endif /* _h_PS_CRYPTOLIB */

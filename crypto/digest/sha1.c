@@ -1,11 +1,11 @@
-/*
- *	sha1.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    sha1.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	SHA1 hash implementation
+ *	SHA1 hash implementation.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -45,7 +45,7 @@
 #ifdef USE_BURN_STACK
 static void _sha1_compress(psDigestContext_t *md)
 #else
-static void sha1_compress(psDigestContext_t *md)
+void sha1_compress(psDigestContext_t *md)
 #endif /* USE_BURN_STACK */
 {
 	uint32		a,b,c,d,e,W[80],i;
@@ -75,7 +75,7 @@ static void sha1_compress(psDigestContext_t *md)
 	expand it
  */
 	for (i = 16; i < 80; i++) {
-		W[i] = ROL(W[i-3] ^ W[i-8] ^ W[i-14] ^ W[i-16], 1); 
+		W[i] = ROL(W[i-3] ^ W[i-8] ^ W[i-14] ^ W[i-16], 1);
 	}
 
 /*
@@ -155,8 +155,8 @@ static void sha1_compress(psDigestContext_t *md)
 	md->sha1.state[4] = md->sha1.state[4] + e;
 }
 
-#ifdef USE_BURN_STACK 
-static void sha1_compress(psDigestContext_t *md)
+#ifdef USE_BURN_STACK
+void sha1_compress(psDigestContext_t *md)
 {
 	_sha1_compress(md);
 	psBurnStack(sizeof(uint32) * 87);

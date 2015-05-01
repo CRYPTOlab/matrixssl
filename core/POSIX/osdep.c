@@ -1,13 +1,13 @@
-/*
- *	osdep.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    osdep.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	POSIX layer
+ *	POSIX layer.
  *		Mac OSX 10.5
  *		Linux
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -18,15 +18,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -34,12 +34,14 @@
  */
 /******************************************************************************/
 
+#include "../coreApi.h"
+
 /******************************************************************************/
 #ifdef POSIX
 /******************************************************************************/
 
 /*
-	Universal system POSIX headers and then PScore/coreApi.h 
+	Universal system POSIX headers and then PScore/coreApi.h
 	OS-specific header includes should be added to PScore/osdep.h
 */
 #include <stdlib.h>	/* abort() */
@@ -48,13 +50,15 @@
 #include <errno.h>	/* errno */
 #include <sys/time.h>	/* gettimeofday */
 
-#include "../coreApi.h"
-
+#ifdef USE_PKCS11_ENTROPY
+#include "cryptoki.h"
+#endif
 
 /******************************************************************************/
 /*
 	TIME FUNCTIONS
 */
+#ifndef USE_HIGHRES_TIME
 /******************************************************************************/
 /*
 	Module open and close
@@ -71,44 +75,44 @@ int osdepTimeOpen(void)
 	return PS_SUCCESS;
 }
 
-void osdepTimeClose()
+void osdepTimeClose(void)
 {
 }
 
 /*
 	PScore Public API implementations
-	
+
 	This function always returns seconds/ticks AND OPTIONALLY populates
 	whatever psTime_t happens to be on the given platform.
 */
-int32 psGetTime(psTime_t *t)
+int32 psGetTime(psTime_t *t, void *userPtr)
 {
 	psTime_t	lt;
-	
+
 	if (t == NULL) {
 		if (gettimeofday(&lt, NULL) < 0) {
 			return PS_FAILURE;
 		}
 		return lt.tv_sec;
-	} 
-	
+	}
+
 	if (gettimeofday(t, NULL) < 0) {
 		return PS_FAILURE;
 	}
 	return t->tv_sec;
 }
 
-int32 psDiffMsecs(psTime_t then, psTime_t now)
+int32 psDiffMsecs(psTime_t then, psTime_t now, void *userPtr)
 {
 	if (now.tv_usec < then.tv_usec) {
 		now.tv_sec--;
 		now.tv_usec += 1000000; /* borrow 1 second worth of usec */
 	}
-	return (int32)((now.tv_sec - then.tv_sec) * 1000) + 
+	return (int32)((now.tv_sec - then.tv_sec) * 1000) +
 		((now.tv_usec - then.tv_usec)/ 1000);
 }
 
-int32 psCompareTime(psTime_t a, psTime_t b)
+int32 psCompareTime(psTime_t a, psTime_t b, void *userPtr)
 {
 /*
 	Time comparison.  1 if 'a' is less than or equal.  0 if 'a' is greater
@@ -122,6 +126,109 @@ int32 psCompareTime(psTime_t a, psTime_t b)
 	return 0;
 }
 
+#else /* USE_HIGHRES_TIME */
+/******************************************************************************/
+#ifdef __APPLE__
+/* MAC OS X */
+
+#include <mach/mach_time.h>
+
+static mach_timebase_info_data_t hiresFreq;
+
+int osdepTimeOpen(void)
+{
+	mach_timebase_info(&hiresFreq);
+	return PS_SUCCESS;
+}
+
+void osdepTimeClose(void)
+{
+}
+
+int32 psGetTime(psTime_t *t, void *userPtr)
+{
+	psTime_t	lt;
+
+	if (t == NULL) {
+		t = &lt;
+	}
+	*t = mach_absolute_time();
+	return (int32)((*t * hiresFreq.numer) / (hiresFreq.denom * 1000000000L));
+}
+
+int32 psDiffMsecs(psTime_t then, psTime_t now, void *userPtr)
+{
+	return (int32)(((now - then) * hiresFreq.numer) / (hiresFreq.denom * 1000000));
+}
+
+int64_t psDiffUsecs(psTime_t then, psTime_t now)
+{
+	return (int64_t)(((now - then) * hiresFreq.numer) / (hiresFreq.denom * 1000));
+}
+
+int32 psCompareTime(psTime_t a, psTime_t b, void *userPtr)
+{
+	return a <= b ? 1 : 0;
+}
+
+/******************************************************************************/
+#else /* !APPLE, !tile */
+/******************************************************************************/
+/* LINUX */
+int osdepTimeOpen(void)
+{
+	return PS_SUCCESS;
+}
+
+void osdepTimeClose(void)
+{
+}
+
+int32 psGetTime(psTime_t *t, void *userPtr)
+{
+	psTime_t	lt;
+
+	if (t == NULL) {
+		t = &lt;
+	}
+	clock_gettime(CLOCK_MONOTONIC, t);
+	return t->tv_sec;
+}
+
+int32 psDiffMsecs(psTime_t then, psTime_t now, void *userPtr)
+{
+	if (now.tv_nsec < then.tv_nsec) {
+		now.tv_sec--;
+		now.tv_nsec += 1000000000L; /* borrow 1 second worth of nsec */
+	}
+	return (int32)((now.tv_sec - then.tv_sec) * 1000) +
+		((now.tv_nsec - then.tv_nsec)/ 1000000);
+}
+
+int64_t psDiffUsecs(psTime_t then, psTime_t now)
+{
+	if (now.tv_nsec < then.tv_nsec) {
+		now.tv_sec--;
+		now.tv_nsec += 1000000000L; /* borrow 1 second worth of nsec */
+	}
+	return (int32)((now.tv_sec - then.tv_sec) * 1000) +
+		((now.tv_nsec - then.tv_nsec)/ 1000);
+}
+
+int32 psCompareTime(psTime_t a, psTime_t b)
+{
+	/* Time comparison.  1 if 'a' is less than or equal.  0 if 'a' is greater */
+	if (a.tv_sec < b.tv_sec) {
+		return 1;
+	}
+	if (a.tv_sec == b.tv_sec && a.tv_nsec <= b.tv_nsec) {
+		return 1;
+	}
+	return 0;
+}
+#endif /* !APPLE */
+
+#endif /* USE_HIGHRES_TIME */
 
 /******************************************************************************/
 
@@ -143,15 +250,15 @@ int osdepMutexOpen(void)
 		psErrorInt("pthread_mutexattr_init failed %d\n", rc);
 		return PS_PLATFORM_FAIL;
 	}
-	return PS_SUCCESS; 
+	return PS_SUCCESS;
 }
 
-int osdepMutexClose()
+int osdepMutexClose(void)
 {
 	if (pthread_mutexattr_destroy(&attr) != 0) {
 		psTraceCore("pthread_mutex_destroy failed\n");
 	}
-	return PS_SUCCESS; 
+	return PS_SUCCESS;
 }
 
 /*
@@ -164,7 +271,7 @@ int32 psCreateMutex(psMutex_t *mutex)
 	if ((err = pthread_mutex_init(mutex, &attr)) != 0) {
 		psTraceIntCore("pthread_mutex_init failed %d\n", err);
 		return PS_PLATFORM_FAIL;
-	}	
+	}
 	return PS_SUCCESS;
 }
 
@@ -199,6 +306,33 @@ void psDestroyMutex(psMutex_t *mutex)
 	ENTROPY FUNCTIONS
 */
 /******************************************************************************/
+#if   defined USE_PKCS11_ENTROPY
+int osdepEntropyOpen(void)
+{
+	return PS_SUCCESS;
+}
+void osdepEntropyClose(void)
+{
+}
+int32 psGetEntropy(unsigned char *bytes, uint32 size, void *userPtr)
+{
+	CK_RV rv;
+	CK_SESSION_HANDLE hSes;
+
+	if (pkcs11OpenSession(&hSes, 0) != CKR_OK) {
+		return PS_PLATFORM_FAIL;
+	}
+
+	if ( (rv = C_GenerateRandom(hSes, bytes, size)) ) {
+		pkcs11CloseSession(hSes);
+		return PS_PLATFORM_FAIL;
+	}
+
+	pkcs11CloseSession(hSes);
+	return (int32)size;
+}
+/******************************************************************************/
+#else
 #define	MAX_RAND_READS		1024
 
 static int32 urandfd = -1;
@@ -224,7 +358,7 @@ int osdepEntropyOpen(void)
 	return PS_SUCCESS;
 }
 
-void osdepEntropyClose()
+void osdepEntropyClose(void)
 {
 	if (randfd != urandfd) {
 		close(randfd);
@@ -235,10 +369,10 @@ void osdepEntropyClose()
 /*
 	PScore Public API implementations
 */
-int32 psGetEntropy(unsigned char *bytes, uint32 size)
+int32 psGetEntropy(unsigned char *bytes, uint32 size, void *userPtr)
 {
 /*
-	Read from /dev/random non-blocking first, then from urandom if it would 
+	Read from /dev/random non-blocking first, then from urandom if it would
 	block.  Also, handle file closure case and re-open.
 */
 	int32			rc, sanity, retry, readBytes;
@@ -273,7 +407,7 @@ int32 psGetEntropy(unsigned char *bytes, uint32 size)
 		size -= rc;
 	}
 
-	sanity = retry = 0;	
+	sanity = retry = 0;
 	while (size) {
 		if ((rc = read(urandfd, where, size)) < 0 || sanity > MAX_RAND_READS) {
 			if (errno == EINTR) {
@@ -303,6 +437,7 @@ int32 psGetEntropy(unsigned char *bytes, uint32 size)
 	}
 	return readBytes;
 }
+#endif
 /******************************************************************************/
 
 
@@ -362,7 +497,7 @@ void osdepBreak(void)
 #endif /* HALT_ON_PS_ERROR */
 
 
-#ifdef MATRIX_USE_FILE_SYSTEM 
+#ifdef MATRIX_USE_FILE_SYSTEM
 /******************************************************************************/
 /*
 	FILE ACCESS FUNCTION
@@ -370,7 +505,7 @@ void osdepBreak(void)
 /******************************************************************************/
 /*
 	Memory info:
-	Caller must free 'buf' parameter on success 
+	Caller must free 'buf' parameter on success
 	Callers do not need to free buf on function failure
 */
 int32 psGetFileBuf(psPool_t *pool, const char *fileName, unsigned char **buf,
@@ -398,7 +533,7 @@ int32 psGetFileBuf(psPool_t *pool, const char *fileName, unsigned char **buf,
 	memset(*buf, 0x0, (size_t)fstat.st_size + 1);
 
 	while (((tmp = fread(*buf + *bufLen, sizeof(char), 512, fp)) > 0) &&
-			(*bufLen < fstat.st_size)) { 
+			(*bufLen < fstat.st_size)) {
 		*bufLen += (int32)tmp;
 	}
 	fclose(fp);

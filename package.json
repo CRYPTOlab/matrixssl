@@ -1,7 +1,7 @@
 {
     "name": "matrixssl",
     "description": "MatrixSSL Source Code",
-    "version": "3.4.0",
+    "version": "3.7.2",
     "keywords": [
         "matrixssl"
     ],

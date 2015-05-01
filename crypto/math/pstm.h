@@ -1,11 +1,11 @@
-/*
- *	pstm.h
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    pstm.h
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
- *	multiple-precision integer library
+ *	multiple-precision integer library.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -16,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -34,6 +34,7 @@
 
 #ifndef _h_PSTMATH
 #define _h_PSTMATH
+#ifndef DISABLE_PSTM
 
 /* Define this here to avoid including circular limits.h on some platforms */
 #ifndef CHAR_BIT
@@ -42,11 +43,11 @@
 
 /******************************************************************************/
 /*
-    If native 64 bit integers are not supported, we do not support 32x32->64 
+	If native 64 bit integers are not supported, we do not support 32x32->64
 	in hardware, so we must set the 16 bit flag to produce 16x16->32 products.
 */
 #ifndef HAVE_NATIVE_INT64
-    #define PSTM_16BIT
+	#define PSTM_16BIT
 #endif /* ! HAVE_NATIVE_INT64 */
 
 /******************************************************************************/
@@ -63,13 +64,13 @@
 	typedef unsigned char		pstm_digit;
 	typedef unsigned short		pstm_word;
 	#define DIGIT_BIT			8
-	
+
 #elif defined(PSTM_16BIT)
 /*	16-bit digits, 32-bit word products */
 	typedef unsigned short		pstm_digit;
 	typedef unsigned long		pstm_word;
 	#define	DIGIT_BIT			16
-	
+
 #elif defined(PSTM_64BIT)
 /*	64-bit digits, 128-bit word products */
 	#ifndef __GNUC__
@@ -78,7 +79,7 @@
 	typedef unsigned long		pstm_digit;
 	typedef unsigned long		pstm_word __attribute__ ((mode(TI)));
 	#define DIGIT_BIT			64
-	
+
 #else
 /*	This is the default case, 32-bit digits, 64-bit word products */
 	typedef uint32			pstm_digit;
@@ -113,7 +114,8 @@
 
 typedef struct  {
 	int16	used, alloc, sign;
-	pstm_digit *dp;
+	pstm_digit	*dp;
+	psPool_t	*pool;
 } pstm_int;
 
 /******************************************************************************/
@@ -143,7 +145,7 @@ extern int32 pstm_init_for_read_unsigned_bin(psPool_t *pool, pstm_int *a,
 
 extern int32 pstm_read_unsigned_bin(pstm_int *a, unsigned char *b, int32 c);
 
-extern int32 pstm_unsigned_bin_size(pstm_int *a);	
+extern int32 pstm_unsigned_bin_size(pstm_int *a);
 
 extern int32 pstm_copy(pstm_int * a, pstm_int * b);
 
@@ -169,11 +171,11 @@ extern int32 pstm_lshd(pstm_int * a, int16 b);
 
 extern int32 pstm_div(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 				pstm_int *d);
-				
+
 extern int32 pstm_div_2d(psPool_t *pool, pstm_int *a, int16 b, pstm_int *c,
 				pstm_int *d);
-	
-extern int32 pstm_div_2(pstm_int * a, pstm_int * b);											
+
+extern int32 pstm_div_2(pstm_int * a, pstm_int * b);
 
 extern int32 s_pstm_sub(pstm_int *a, pstm_int *b, pstm_int *c);
 
@@ -187,32 +189,42 @@ extern int32 pstm_mod(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c);
 
 extern int32 pstm_mulmod(psPool_t *pool, pstm_int *a, pstm_int *b, pstm_int *c,
 				pstm_int *d);
-			
+
 extern int32 pstm_exptmod(psPool_t *pool, pstm_int *G, pstm_int *X, pstm_int *P,
 				pstm_int *Y);
 
-extern int32 pstm_2expt(pstm_int *a, int16 b);				
-			
+extern int32 pstm_2expt(pstm_int *a, int16 b);
+
 extern int32 pstm_add(pstm_int *a, pstm_int *b, pstm_int *c);
 
 extern int32 pstm_to_unsigned_bin(psPool_t *pool, pstm_int *a,
 				unsigned char *b);
-								
+
+extern int32 pstm_to_unsigned_bin_nr(psPool_t *pool, pstm_int *a,
+				unsigned char *b);
+
 extern int32 pstm_montgomery_setup(pstm_int *a, pstm_digit *rho);
-				
+
 extern int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 				pstm_digit mp, pstm_digit *paD, uint32 paDlen);
 
 extern int32 pstm_mul_comba(psPool_t *pool, pstm_int *A, pstm_int *B,
 				pstm_int *C, pstm_digit *paD, uint32 paDlen);
-				
+
 extern int32 pstm_sqr_comba(psPool_t *pool, pstm_int *A, pstm_int *B,
 				pstm_digit *paD, uint32 paDlen);
-				
+
 extern int32 pstm_cmp_d(pstm_int *a, pstm_digit b);
-				
+
 extern int32 pstm_montgomery_calc_normalization(pstm_int *a, pstm_int *b);
 
 extern int32 pstm_mul_d(pstm_int *a, pstm_digit b, pstm_int *c);
+
+extern int32 pstm_invmod(psPool_t *pool, pstm_int * a, pstm_int * b,
+				pstm_int * c);
+
+#else /* DISABLE_PSTM */
+	typedef int32 pstm_int;
+#endif /* !DISABLE_PSTM */
 #endif /* _h_PSTMATH */
 

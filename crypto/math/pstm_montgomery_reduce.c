@@ -1,10 +1,11 @@
-/*
- *	pstm_montgomery_reduce.c
- *	Release $Name: MATRIXSSL-3-4-0-OPEN $
+/**
+ *	@file    pstm_montgomery_reduce.c
+ *	@version 33ef80f (HEAD, tag: MATRIXSSL-3-7-2-OPEN, tag: MATRIXSSL-3-7-2-COMM, origin/master, origin/HEAD, master)
  *
+ *	Multiprecision Montgomery Reduction.
  */
 /*
- *	Copyright (c) 2013 INSIDE Secure Corporation
+ *	Copyright (c) 2013-2015 INSIDE Secure Corporation
  *	Copyright (c) PeerSec Networks, 2002-2011
  *	All Rights Reserved
  *
@@ -15,15 +16,15 @@
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
  *
- *	This General Public License does NOT permit incorporating this software 
- *	into proprietary programs.  If you are unable to comply with the GPL, a 
+ *	This General Public License does NOT permit incorporating this software
+ *	into proprietary programs.  If you are unable to comply with the GPL, a
  *	commercial license for this software may be purchased from INSIDE at
  *	http://www.insidesecure.com/eng/Company/Locations
- *	
- *	This program is distributed in WITHOUT ANY WARRANTY; without even the 
- *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ *
+ *	This program is distributed in WITHOUT ANY WARRANTY; without even the
+ *	implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *	See the GNU General Public License for more details.
- *	
+ *
  *	You should have received a copy of the GNU General Public License
  *	along with this program; if not, write to the Free Software
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -32,6 +33,7 @@
 /******************************************************************************/
 
 #include "../cryptoApi.h"
+#ifndef DISABLE_PSTM
 
 /******************************************************************************/
 
@@ -40,8 +42,9 @@
 #if !defined(__GNUC__) || !defined(__i386__) || !defined(PSTM_32BIT)
 #error "PSTM_X86 option requires GCC and 32 bit mode x86 processor"
 #endif
+//#pragma message ("Using 32 bit x86 Assembly Optimizations")
 
-#define MONT_START 
+#define MONT_START
 #define MONT_FINI
 #define LOOP_END
 #define LOOP_START \
@@ -75,8 +78,9 @@ asm(                                        \
 #if !defined(__GNUC__) || !defined(__x86_64__) || !defined(PSTM_64BIT)
 #error "PSTM_X86_64 option requires PSTM_64BIT, GCC and 64 bit mode x86 processor"
 #endif
+//#pragma message ("Using 64 bit x86_64 Assembly Optimizations")
 
-#define MONT_START 
+#define MONT_START
 #define MONT_FINI
 #define LOOP_END
 #define LOOP_START \
@@ -93,7 +97,7 @@ asm(                                                       \
 	"movq %%rdx,%1 \n\t"                                   \
 	:"=g"(_c[LO]), "=r"(cy)                                \
 	:"0"(_c[LO]), "1"(cy), "r"(mu), "r"(*tmpm++)           \
-	: "%rax", "%rdx", "%cc")
+	: "%rax", "%rdx", "cc")
 
 #define INNERMUL8				\
 asm(							\
@@ -186,7 +190,7 @@ asm(							\
 	\
 	:"=r"(_c), "=r"(cy)                    \
 	: "0"(_c),  "1"(cy), "g"(mu), "r"(tmpm)\
-	: "%rax", "%rdx", "%r10", "%r11", "%cc")
+	: "%rax", "%rdx", "%r10", "%r11", "cc")
 
 #define PROPCARRY                          \
 asm(                                       \
@@ -195,20 +199,19 @@ asm(                                       \
 	"movzbq %%al,%1 \n\t"                  \
 	:"=g"(_c[LO]), "=r"(cy)                \
 	:"0"(_c[LO]), "1"(cy)                  \
-	: "%rax", "%cc")
+	: "%rax", "cc")
 
 /******************************************************************************/
 #elif defined(PSTM_ARM)
-/* ARMv4 code */
-/* The 'ITE CS' opcode is Thumb2. Remove for non Thumb asm. */
 
-#define MONT_START 
+#define MONT_START
 #define MONT_FINI
 #define LOOP_END
 #define LOOP_START \
 mu = c[x] * mp
 
-#ifdef __THUMBEL__
+#ifdef __thumb2__
+//#pragma message ("Using 32 bit ARM Thumb2 Assembly Optimizations")
 #define INNERMUL                    \
 asm(                                \
 	" LDR    r0,%1            \n\t" \
@@ -219,7 +222,7 @@ asm(                                \
 	" UMLAL  r0,%0,%3,%4      \n\t" \
 	" STR    r0,%1            \n\t" \
 	:"=r"(cy),"=m"(_c[0])\
-	:"0"(cy),"r"(mu),"r"(*tmpm++),"1"(_c[0])\
+	:"0"(cy),"r"(mu),"r"(*tmpm++),"m"(_c[0])\
 	:"r0","%cc");
 #define PROPCARRY                  \
 asm(                               \
@@ -230,9 +233,10 @@ asm(                               \
 	" MOVCS %0,#1            \n\t" \
 	" MOVCC %0,#0            \n\t" \
 	:"=r"(cy),"=m"(_c[0])\
-	:"0"(cy),"1"(_c[0])\
+	:"0"(cy),"m"(_c[0])\
 	:"r0","%cc");
 #else /* Non-Thumb2 code */
+//#pragma message ("Using 32 bit ARM Assembly Optimizations")
 #define INNERMUL                    \
 asm(                                \
 	" LDR    r0,%1            \n\t" \
@@ -242,7 +246,7 @@ asm(                                \
 	" UMLAL  r0,%0,%3,%4      \n\t" \
 	" STR    r0,%1            \n\t" \
 	:"=r"(cy),"=m"(_c[0])\
-	:"0"(cy),"r"(mu),"r"(*tmpm++),"1"(_c[0])\
+	:"0"(cy),"r"(mu),"r"(*tmpm++),"m"(_c[0])\
 	:"r0","%cc");
 #define PROPCARRY                  \
 asm(                               \
@@ -252,15 +256,16 @@ asm(                               \
 	" MOVCS %0,#1            \n\t" \
 	" MOVCC %0,#0            \n\t" \
 	:"=r"(cy),"=m"(_c[0])\
-	:"0"(cy),"1"(_c[0])\
+	:"0"(cy),"m"(_c[0])\
 	:"r0","%cc");
-#endif /* __THUMBEL__ */
+#endif /* __thumb2__ */
 
 
 /******************************************************************************/
 #elif defined(PSTM_MIPS)
 /* MIPS32 */
-#define MONT_START 
+//#pragma message ("Using 32 bit MIPS Assembly Optimizations")
+#define MONT_START
 #define MONT_FINI
 #define LOOP_END
 #define LOOP_START \
@@ -294,10 +299,12 @@ asm(                                  \
 	:"r"(cy),"r"(_c[0])\
 	:"$10");
 
+
 /******************************************************************************/
 #else
+
 /* ISO C code */
-#define MONT_START 
+#define MONT_START
 #define MONT_FINI
 #define LOOP_END
 #define LOOP_START \
@@ -329,6 +336,10 @@ int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 	int16		pa;
 
 	pa = m->used;
+	if (pa > a->alloc) {
+		/* Sanity test for bad numbers.  This will confirm no buffer overruns */
+		return PS_LIMIT_FAIL;
+	}
 
 	if (paD && paDlen >= (uint32)2*pa+1) {
 		c = paD;
@@ -356,6 +367,13 @@ int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 		_c   = c + x;
 		tmpm = m->dp;
 		y = 0;
+#ifdef PSTM_X86_64
+		for (; y < (pa & ~7); y += 8) {
+			INNERMUL8;
+			_c   += 8;
+			tmpm += 8;
+		}
+#endif /* PSTM_X86_64 */
 		for (; y < pa; y++) {
 			INNERMUL;
 			++_c;
@@ -365,7 +383,7 @@ int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 			PROPCARRY;
 			++_c;
 		}
-	}         
+	}
 
 	/* now copy out */
 	_c   = c + pa;
@@ -382,10 +400,10 @@ int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 
 	a->used = pa+1;
 	pstm_clamp(a);
-  
+
 	/* reuse x as return code */
 	x = PSTM_OKAY;
-	
+
 	/* if A >= m then A = A - m */
 	if (pstm_cmp_mag (a, m) != PSTM_LT) {
 		if (s_pstm_sub (a, m, a) != PSTM_OKAY) {
@@ -393,9 +411,10 @@ int32 pstm_montgomery_reduce(psPool_t *pool, pstm_int *a, pstm_int *m,
 		}
 	}
 	if (paDlen < (uint32)2*pa+1) {
-		psFree(c);
+		psFree(c, pool);
 	}
 	return x;
 }
 
+#endif /* !DISABLE_PSTM */
 /******************************************************************************/
