@@ -2212,7 +2212,11 @@ static int32 validateDateRange(psX509Cert_t *cert)
 	unsigned short	m, d;
 
 	time(&rawtime);
+#if EMBEDTHIS_FIX || 1
+	gmtime_r(&rawtime, &t);
+#else
 	localtime_r(&rawtime, &t);
+#endif
 	/* Localtime does months from 0-11 and (year-1900)! Normalize it. */
 	t.tm_mon++;
 	t.tm_year += 1900;
