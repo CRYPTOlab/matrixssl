@@ -56,11 +56,19 @@ int32 psCryptoOpen(char *config)
 			"\nCurrent: %s\n", config);
 		return -1;
 	}
+#if EMBEDTHIS 
+    /*
+        psCoreOpen must be first
+     */
 	psOpenPrng();
+#endif
 	if (psCoreOpen(PSCORE_CONFIG) < 0) {
 		psError("pscore open failure\n");
 		return PS_FAILURE;
 	}
+#if EMBEDTHIS || 1
+	psOpenPrng();
+#endif
 	return 0;
 }
 

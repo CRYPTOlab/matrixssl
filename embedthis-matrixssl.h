@@ -1,0 +1,106 @@
+/*
+    embedthis-matrixssl.h - Embedthis MatrixSSL overrides
+ */
+
+#ifndef _h_EMBEDTHIS_MATRIXSSL
+#define _h_EMBEDTHIS_MATRIXSSL
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+    Debugging (enable this to turn on full debugging and build with "make MATRIX_DEBUG=1"
+ */
+#if MATRIX_DEBUG || 1
+#define USE_SSL_HANDSHAKE_MSG_TRACE
+#define USE_SSL_INFORMATIONAL_TRACE
+#define USE_CORE_TRACE
+#define USE_CRYPTO_TRACE
+#endif
+
+/*
+    Multithreading is required
+ */
+#define USE_MULTITHREADING
+
+/*
+    Protocols
+ */
+#define USE_TLS
+#define USE_TLS_1_1
+#define USE_TLS_1_2
+#define DISABLE_SSLV3
+
+/*
+    Features
+ */
+#define USE_CLIENT_SIDE_SSL
+#define USE_SERVER_SIDE_SSL
+#define USE_CLIENT_AUTH
+#define SERVER_CAN_SEND_EMPTY_CERT_REQUEST
+#define SERVER_WILL_ACCEPT_EMPTY_CLIENT_CERT_MSG
+
+/*
+    Crypto
+ */
+#define USE_AES
+#define USE_AES_GCM
+#define USE_DH
+#define USE_ECC
+#define USE_RSA
+
+/*
+    Ciphers
+ */
+#if MOZILLA_CIPHER_SUITE
+    /*
+        Default ciphers from Mozilla with PFS (https://wiki.mozilla.org/Security/Server_Side_TLS) without SSLv3 ciphers.
+
+        openssl ciphers -V 'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4:!SSLv3'
+     */
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA384
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
+    #define USE_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_RSA_WITH_AES_256_GCM_SHA384
+    #define USE_TLS_RSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_RSA_WITH_AES_256_CBC_SHA256
+    #define USE_TLS_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384
+    #define USE_TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384
+    #define USE_TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384
+    #define USE_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384
+    #define USE_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256
+
+#else
+    /*
+        Recommended cipher suite with PFS (https://raymii.org/s/tutorials/Strong_SSL_Security_On_Apache2.html)
+        openssl ciphers -V 'AES128+EECDH:AES128+EDH:!DSS'
+     */
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+    #define USE_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+    #define USE_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
+    #define USE_TLS_DHE_RSA_WITH_AES_128_CBC_SHA
+#endif
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _h_EMBEDTHIS_MATRIXSSL */
+
+/******************************************************************************/
+

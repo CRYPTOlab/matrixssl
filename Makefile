@@ -18,3 +18,7 @@ clean:
 	$(MAKE) clean --directory=matrixssl/test
 	if [ -d "./apps" ];then $(MAKE) clean --directory=apps; fi
 
+# EMBEDTHIS 
+debug:
+	$(MAKE) MATRIX_DEBUG=1 clean
+	$(MAKE) MATRIX_DEBUG=1

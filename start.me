@@ -11,7 +11,8 @@ Me.load({
                     let os = Config.CPU == 'x64' ? 'x86_amd64' : 'x86'
                     sh('windows.bat ' + os + ' ' + command)
                 } else {
-                    sh('make')
+                    // sh('make')
+                    sh('make debug')
                 }
             `
         }

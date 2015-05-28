@@ -42,9 +42,7 @@ extern "C" {
 #endif
 
 #if EMBEDTHIS || 1
-#define USE_CLIENT_AUTH 1
-#define SERVER_CAN_SEND_EMPTY_CERT_REQUEST 1
-#define SERVER_WILL_ACCEPT_EMPTY_CLIENT_CERT_MSG 1
+#include "embedthis-matrixssl.h"
 #endif
 
 #include "core/coreApi.h"
@@ -53,7 +51,6 @@ extern "C" {
 #include "matrixsslConfig.h"
 #include "matrixssllib.h"
 #include "version.h"
-
 
 /******************************************************************************/
 /*

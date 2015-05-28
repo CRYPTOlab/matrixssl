@@ -35,6 +35,10 @@
 #ifndef _h_PS_CRYPTOCONFIG
 #define _h_PS_CRYPTOCONFIG
 
+#if EMBEDTHIS || 1
+#include "embedthis-matrixssl.h"
+#endif
+
 /******************************************************************************/
 /* Configurable features */
 /******************************************************************************/
