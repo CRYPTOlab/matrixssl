@@ -1,12 +1,12 @@
 /*
-    start.me - MatrixSSL MakeMe file
+    matrixssl.me - MatrixSSL MakeMe file
  */
 
 Me.load({
     targets: {
-        postcache: {
+        'pak-postcache': {
             action: `
-                trace('Build', 'PHP libraries')
+                trace('Build', 'MatrixSSL libraries')
                 if (Config.OS == 'windows') {
                     let os = Config.CPU == 'x64' ? 'x86_amd64' : 'x86'
                     sh('windows.bat ' + os + ' ' + command)
